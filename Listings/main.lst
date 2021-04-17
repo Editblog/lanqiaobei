@@ -1,0 +1,311 @@
+C51 COMPILER V9.60.0.0   MAIN                                                              04/16/2021 13:53:33 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE INCDIR(.\driver) DEBUG OBJECTEXTEND PRIN
+                    -T(.\Listings\main.lst) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include <stc15f2k60s2.h>
+   2          #include "intrins.h"
+   3          #include "ds1302.h"
+   4          #include "iic.h"
+   5          #include "onewire.h"
+   6          #define u8 unsigned char
+   7          #define u16 unsigned int
+   8                  
+   9          u8 code du[]={0x3F,0x06,0x5B,0x4F,0x66,0x6D,0x7D,0x07,0x7F,0x6F};
+  10          u8 code wei[]={0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80};
+  11          sbit TX = P1^0;
+  12          sbit RX = P1^1;
+  13          void All_Init(void)
+  14          {
+  15   1              //LED
+  16   1          P2 &= 0X1F;   //关573
+  17   1              P0 =  0XFF;   //预送数据
+  18   1              P2 |= 0X80;   //开相应573
+  19   1              P0 =  0XFF;   //送数据
+  20   1              P2 &= 0X1F;   //关573
+  21   1              
+  22   1              //蜂鸣器
+  23   1          P2 &= 0X1F;   //关573
+  24   1              P0 =  0X00;   //预送数据
+  25   1              P2 |= 0XA0;   //开相应573
+  26   1              P0 =  0X00;   //送数据
+  27   1              P2 &= 0X1F;   //关573
+  28   1              
+  29   1              //数码管位选
+  30   1              P2 &= 0X1F;   //关573
+  31   1              P0 =  0X00;   //预送数据
+  32   1              P2 |= 0XC0;   //开相应573
+  33   1              P0 =  0X00;   //送数据
+  34   1              P2 &= 0X1F;   //关573
+  35   1              
+  36   1              //数码管段选
+  37   1              P2 &= 0X1F;   //关573
+  38   1              P0 =  0XFF;   //预送数据
+  39   1              P2 |= 0XE0;   //开相应573
+  40   1              P0 =  0XFF;   //送数据
+  41   1              P2 &= 0X1F;   //关573
+  42   1      }
+  43          
+  44          void Timer0Init(void)           //1毫秒@11.0592MHz
+  45          {
+  46   1              AUXR |= 0x80;           //定时器时钟1T模式
+  47   1              TMOD &= 0xF0;           //设置定时器模式
+  48   1              TL0 = 0xCD;             //设置定时初值
+  49   1              TH0 = 0xD4;             //设置定时初值
+  50   1              TF0 = 0;                //清除TF0标志
+  51   1              TR0 = 1;                //定时器0开始计时
+  52   1              ET0=1;
+  53   1              EA=1;
+  54   1      }
+C51 COMPILER V9.60.0.0   MAIN                                                              04/16/2021 13:53:33 PAGE 2   
+
+  55          
+  56          #define state_0 0 // 消抖
+  57          #define state_1 1 //按键是否按下
+  58          #define state_2 2 //按键弹起
+  59          u8 key_num = 0xff;
+  60          void key_scanf(void)
+  61          {
+  62   1              static u8 stats = 0;
+  63   1              u8 key_x,key_y=0;
+  64   1              switch(stats)
+  65   1              {
+  66   2                      case state_0:
+  67   2                              P3 = 0x0f;P42=0;P44=0;
+  68   2                              if(P3!=0x0f)
+  69   2                                      stats = state_1;
+  70   2                              break;
+  71   2                      case state_1:
+  72   2                              if(!P30|!P31|!P32|!P33)
+  73   2                              {
+  74   3                                      if(!P30) key_y = 4;
+  75   3                                      if(!P31) key_y = 3;
+  76   3                                      if(!P32) key_y = 2;
+  77   3                                      if(!P33) key_y = 1;
+  78   3                              }
+  79   2                              P3 = 0xf0;P42=1;P44=1;
+  80   2                              if(!P34|!P35|!P42|!P44)
+  81   2                              {
+  82   3                                      if(!P34) key_x = 4;
+  83   3                                      if(!P35) key_x = 3;
+  84   3                                      if(!P42) key_x = 2;
+  85   3                                      if(!P44) key_x = 1;
+  86   3                                      key_num = key_x*4 +key_y -5;
+  87   3                                      stats = state_2;
+  88   3                              }
+  89   2                              else
+  90   2                                      stats = state_0;
+  91   2                              break;
+  92   2                      case state_2:
+  93   2                              P3 = 0x0f;P42=0;P44=0;
+  94   2                              if(P3==0x0f)
+  95   2                                      stats = state_0;
+  96   2                              break;
+  97   2              }
+  98   1      }
+  99          
+ 100          
+ 101          
+ 102          void Delay12us()                //@11.0592MHz
+ 103          {
+ 104   1              unsigned char i;
+ 105   1      
+ 106   1              _nop_();
+ 107   1              _nop_();
+ 108   1              _nop_();
+ 109   1              i = 30;
+ 110   1              while (--i);
+ 111   1      }
+ 112          
+ 113          void send_wave(void)
+ 114          {
+ 115   1              unsigned char i = 1;
+ 116   1              do
+C51 COMPILER V9.60.0.0   MAIN                                                              04/16/2021 13:53:33 PAGE 3   
+
+ 117   1              {
+ 118   2                      TX = 1;
+ 119   2                      Delay12us();
+ 120   2                      TX = 0;
+ 121   2                      Delay12us();
+ 122   2              }
+ 123   1              while(i--);
+ 124   1      }
+ 125          u8 smg_time[8];
+ 126          u8 smg_adc[8];
+ 127          u8 shi,fen,miao;
+ 128          u8 adc1,adc3;
+ 129          bit adc_flag=0;
+ 130          u8 AT24C02=0;
+ 131          u8 smg_test[8];
+ 132          u8 temp=0;
+ 133          
+ 134          u16 distance,time;
+ 135          u8 smg_distance[8];
+ 136          bit sonic_flag;
+ 137          
+ 138          u8 mode=0;
+ 139          void main()
+ 140          {
+ 141   1              All_Init();
+ 142   1              set_srf(23,59,55);
+ 143   1              
+ 144   1              AT24C02=read_24c02(0x01);
+ 145   1              smg_test[0]=du[AT24C02/10];
+ 146   1              smg_test[1]=du[AT24C02%10];
+ 147   1              write_24c02(0x01,++AT24C02);
+ 148   1              Timer0Init();
+ 149   1              
+ 150   1              write_adc(255);
+ 151   1              
+ 152   1              while(1)
+ 153   1              {
+ 154   2                      EA=0;
+ 155   2                      miao=Read_Ds1302_Byte(0x81);
+ 156   2                      fen=Read_Ds1302_Byte(0x83);
+ 157   2                      shi=Read_Ds1302_Byte(0x85);
+ 158   2                      EA=1;
+ 159   2                      smg_time[0]=du[shi/16];smg_time[1]=du[shi%16];smg_time[2]=0x40;
+ 160   2                      smg_time[3]=du[fen/16];smg_time[4]=du[fen%16];smg_time[5]=0x40;
+ 161   2                      smg_time[6]=du[miao/16];smg_time[7]=du[miao%16];
+ 162   2                      
+ 163   2                      if(adc_flag)
+ 164   2                      {
+ 165   3                              adc_flag=0;
+ 166   3                              adc1=read_adc(0x01);
+ 167   3                              adc3=read_adc(0x03);
+ 168   3                              smg_adc[0]=du[adc1/100];smg_adc[1]=du[adc1/10%10];smg_adc[2]=du[adc1%10];
+ 169   3                              smg_adc[5]=du[adc3/100];smg_adc[6]=du[adc3/10%10];smg_adc[7]=du[adc3%10]; 
+ 170   3                              write_adc(adc3);
+ 171   3                      }
+ 172   2                      
+ 173   2                      temp= (unsigned char)rd_temperature_f();
+ 174   2                      smg_test[6]=du[temp/10];
+ 175   2                      smg_test[7]=du[temp%10];
+ 176   2                      
+ 177   2                      switch(key_num)
+ 178   2                      {
+C51 COMPILER V9.60.0.0   MAIN                                                              04/16/2021 13:53:33 PAGE 4   
+
+ 179   3                              case 0:                         
+ 180   3                                      mode++;
+ 181   3                                      if(mode==4)     mode=0;
+ 182   3                                      key_num=0xff;
+ 183   3                                      break;
+ 184   3                              case 1:                         
+ 185   3                                      mode=1;
+ 186   3                                      key_num=0xff;
+ 187   3                                      break;
+ 188   3                              case 2:                         
+ 189   3                                      mode=2;
+ 190   3                                      key_num=0xff;
+ 191   3                                      break;
+ 192   3                              case 3:                         
+ 193   3                                      mode=3;
+ 194   3                                      key_num=0xff;
+ 195   3                                      break;
+ 196   3                              case 4:                         
+ 197   3                                      mode=0;
+ 198   3                                      key_num=0xff;
+ 199   3                                      break;
+ 200   3                              default:
+ 201   3                              break;
+ 202   3                      }
+ 203   2                      
+ 204   2                      if(sonic_flag)
+ 205   2                      {
+ 206   3                              sonic_flag = 0;
+ 207   3                              send_wave(); 
+ 208   3                              TR1 = 1;
+ 209   3                              while((RX == 1) && (TF1 == 0));
+ 210   3                              TR1 = 0;
+ 211   3                              if(TF1 == 1)
+ 212   3                              {
+ 213   4                                      TF1 = 0;
+ 214   4                              }
+ 215   3                              else
+ 216   3                              {
+ 217   4                                      time = TH1;
+ 218   4                                      time <<= 8;
+ 219   4                                      time |= TL1;
+ 220   4                                      distance = (unsigned int)(time*0.018);  
+ 221   4                              }
+ 222   3                              TH1 = 0;
+ 223   3                              TL1 = 0;
+ 224   3                                                      
+ 225   3                              smg_distance[5]=du[distance/100]|0x80;
+ 226   3                              smg_distance[6]=du[distance%100/10];
+ 227   3                              smg_distance[7]=du[distance%10];
+ 228   3                      }
+ 229   2              }
+ 230   1      }
+ 231          
+ 232          void time0() interrupt 1
+ 233          {
+ 234   1              static int smg_count=0,key_count=0,i=0,adc_count=0,sonic_count=0;
+ 235   1              smg_count++; key_count++;adc_count++;sonic_count++;
+ 236   1              if(key_count==8)
+ 237   1              {
+ 238   2                      key_scanf();
+ 239   2                      key_count=0;
+ 240   2              }
+C51 COMPILER V9.60.0.0   MAIN                                                              04/16/2021 13:53:33 PAGE 5   
+
+ 241   1              
+ 242   1              if(adc_count==100)
+ 243   1              {
+ 244   2                      adc_count=0;
+ 245   2                      adc_flag=1;
+ 246   2              }
+ 247   1              
+ 248   1              if(smg_count==2)
+ 249   1              {
+ 250   2                      smg_count=0;
+ 251   2                      P2=(P2&0x1f)|0xc0;P0=0x00;P2&=0x1f;
+ 252   2                      if(mode==0)
+ 253   2                      {
+ 254   3                              P2=(P2&0x1f)|0xe0;P0=~smg_time[i];P2&=0x1f;
+ 255   3                      }
+ 256   2                      else if(mode==1)
+ 257   2                      {
+ 258   3                              P2=(P2&0x1f)|0xe0;P0=~smg_adc[i];P2&=0x1f;
+ 259   3                      }
+ 260   2                      else if(mode==2)
+ 261   2                      {
+ 262   3                              P2=(P2&0x1f)|0xe0;P0=~smg_test[i];P2&=0x1f;
+ 263   3                      }
+ 264   2                      else if(mode==3)
+ 265   2                      {
+ 266   3                              P2=(P2&0x1f)|0xe0;P0=~smg_distance[i];P2&=0x1f;
+ 267   3                      }
+ 268   2                      
+ 269   2                      P2=(P2&0x1f)|0xc0;P0=wei[i];P2&=0x1f;P0=0xff;
+ 270   2                      i++;
+ 271   2                      if(i==8) i=0;
+ 272   2              }
+ 273   1              
+ 274   1              if(sonic_count==50)
+ 275   1              {
+ 276   2                      sonic_count=0;
+ 277   2                      sonic_flag=1;
+ 278   2              }
+ 279   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1003    ----
+   CONSTANT SIZE    =     18    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     56    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      2    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
