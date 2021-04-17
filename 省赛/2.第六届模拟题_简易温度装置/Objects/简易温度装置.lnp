@@ -1,0 +1,4 @@
+".\Objects\main.obj",
+".\Objects\onewire.obj" 
+TO ".\Objects\简易温度装置" 
+PRINT(".\Listings\简易温度装置.m51") RAMSIZE(256) 

@@ -1,0 +1,269 @@
+C51 COMPILER V9.60.0.0   MAIN                                                              04/09/2021 13:07:34 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE INCDIR(.\driver) DEBUG OBJECTEXTEND PRIN
+                    -T(.\Listings\main.lst) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include <stc15f2k60s2.h>
+   2          #include "iic.h"
+   3          #define u8 unsigned char
+   4          #define u16 unsigned int
+   5                  
+   6          u8 code du[]={0x3F,0x06,0x5B,0x4F,0x66,0x6D,0x7D,0x07,0x7F,0x6F};
+   7          u8 code wei[]={0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80};
+   8          
+   9          void All_Init(void)
+  10          {
+  11   1              //LED
+  12   1          P2 &= 0X1F;   //¹Ø573
+  13   1              P0 =  0XFF;   //Ô¤ËÍÊý¾Ý
+  14   1              P2 |= 0X80;   //¿ªÏàÓ¦573
+  15   1              P0 =  0XFF;   //ËÍÊý¾Ý
+  16   1              P2 &= 0X1F;   //¹Ø573
+  17   1              
+  18   1              //·äÃùÆ÷
+  19   1          P2 &= 0X1F;   //¹Ø573
+  20   1              P0 =  0X00;   //Ô¤ËÍÊý¾Ý
+  21   1              P2 |= 0XA0;   //¿ªÏàÓ¦573
+  22   1              P0 =  0X00;   //ËÍÊý¾Ý
+  23   1              P2 &= 0X1F;   //¹Ø573
+  24   1              
+  25   1              //ÊýÂë¹ÜÎ»Ñ¡
+  26   1              P2 &= 0X1F;   //¹Ø573
+  27   1              P0 =  0X00;   //Ô¤ËÍÊý¾Ý
+  28   1              P2 |= 0XC0;   //¿ªÏàÓ¦573
+  29   1              P0 =  0X00;   //ËÍÊý¾Ý
+  30   1              P2 &= 0X1F;   //¹Ø573
+  31   1              
+  32   1              //ÊýÂë¹Ü¶ÎÑ¡
+  33   1              P2 &= 0X1F;   //¹Ø573
+  34   1              P0 =  0XFF;   //Ô¤ËÍÊý¾Ý
+  35   1              P2 |= 0XE0;   //¿ªÏàÓ¦573
+  36   1              P0 =  0XFF;   //ËÍÊý¾Ý
+  37   1              P2 &= 0X1F;   //¹Ø573
+  38   1      }
+  39          
+  40          void Timer0Init(void)           //1ºÁÃë@11.0592MHz
+  41          {
+  42   1              AUXR |= 0x80;           //¶¨Ê±Æ÷Ê±ÖÓ1TÄ£Ê½
+  43   1              TMOD &= 0xF0;           //ÉèÖÃ¶¨Ê±Æ÷Ä£Ê½
+  44   1              TL0 = 0xCD;             //ÉèÖÃ¶¨Ê±³õÖµ
+  45   1              TH0 = 0xD4;             //ÉèÖÃ¶¨Ê±³õÖµ
+  46   1              TF0 = 0;                //Çå³ýTF0±êÖ¾
+  47   1              TR0 = 1;                //¶¨Ê±Æ÷0¿ªÊ¼¼ÆÊ±
+  48   1              ET0=1;
+  49   1              EA=1;
+  50   1      }
+  51          
+  52          //---------------------------ËÄ¸ö¶ÀÁ¢°´¼ü--------------------------------
+  53          #define btn_io P3
+  54          #define btn_state_0 0     //ÊÇ·ñ°´ÏÂ
+C51 COMPILER V9.60.0.0   MAIN                                                              04/09/2021 13:07:34 PAGE 2   
+
+  55          #define btn_state_1 1    //ÊÇ·ñÊÇ¶¶¶¯
+  56          #define btn_state_2 2     //ÅÐ¶¨°´¼üÓÐÐ§µÄÖÖÀà
+  57          #define btn_state_3 3     //µÈ´ý°´¼üÊÍ·Å
+  58          #define btn_mask 0x0f     //ÆÁ±Î²»ÐèÒªµÄIO
+  59          #define LONG_KEY_TIME 100 //LONG_KEY_TIME*10MS = 3S
+  60          #define SINGLE_KEY_TIME 3 //SINGLE_KEY_TIME*10MS = 30MS
+  61          char btnkey;
+  62          static char btn_state = 0;
+  63          char scanbtn(void)
+  64          {
+  65   1              static int key_time; //°´¼ü¼ÆÊ±±äÁ¿     
+  66   1              static char key_value=0;
+  67   1              char btn_press,btn_return = 0;
+  68   1              btn_press = btn_io & btn_mask;
+  69   1              switch(btn_state)
+  70   1              {
+  71   2                      case btn_state_0:
+  72   2                              key_value=0;
+  73   2                              if(btn_press != btn_mask){
+  74   3                                      key_time = 0; // ÇåÁãÊ±¼ä¼ä¸ô¼ÆÊý
+  75   3                                      btn_state = btn_state_1;
+  76   3                              }
+  77   2                              break;
+  78   2                      case btn_state_1:
+  79   2                              if(btn_press != btn_mask)
+  80   2                              {
+  81   3                                      key_time++; // Ò»´Î10ms
+  82   3                                      if (key_time >= SINGLE_KEY_TIME) // Ïû¶¶Ê±¼äÎª£ºSINGLE_KEY_TIME*10ms = 30ms;
+  83   3                                      {
+  84   4                                              btn_state = btn_state_2;
+  85   4                                      }
+  86   3                              }
+  87   2                              else
+  88   2                                      btn_state = btn_state_0;
+  89   2                              break;
+  90   2                      case btn_state_2:
+  91   2                              if(btn_press == btn_mask)
+  92   2                              {
+  93   3                                      btn_return=key_value;
+  94   3                                      key_value=0;
+  95   3                                      btn_state = btn_state_0; // È¥×´Ì¬3£¬µÈ´ý°´¼üÊÍ·Å
+  96   3                              }
+  97   2                              else
+  98   2                              {
+  99   3                                      if(btn_press == 0x0e) key_value = 1;
+ 100   3                                      if(btn_press == 0x0d) key_value = 2;
+ 101   3                                      if(btn_press == 0x0b) key_value = 3;
+ 102   3                                      if(btn_press == 0x07) key_value = 4;
+ 103   3      
+ 104   3                                      key_time++;
+ 105   3      
+ 106   3                                      if (key_time >= LONG_KEY_TIME) // Èç¹û°´¼üÊ±¼ä³¬¹ý Éè¶¨µÄ³¤°´Ê±¼ä£¨LONG_KEY_TIME*10ms=200*10ms=2000ms£
+             -©, ÔòÅÐ¶¨Îª ³¤°´
+ 107   3                                      {
+ 108   4                                              btn_return =key_value|0x80;
+ 109   4                                              key_value=0;
+ 110   4                                              btn_state = btn_state_3; // È¥×´Ì¬3£¬µÈ´ý°´¼üÊÍ·Å
+ 111   4                                      }
+ 112   3                              }
+ 113   2                              break;
+ 114   2                      case btn_state_3:
+ 115   2                              if(btn_press == 0x0f)   btn_state = btn_state_0;
+C51 COMPILER V9.60.0.0   MAIN                                                              04/09/2021 13:07:34 PAGE 3   
+
+ 116   2                              break;
+ 117   2                      default:
+ 118   2                      break;
+ 119   2              }
+ 120   1              return  btn_return;
+ 121   1      }
+ 122          
+ 123          u8 on_display[8]={0x00,0x3F|0x80,0x6D,0x3F,0x3F,0x06|0x80,0x3F,0x3F};
+ 124          u8 off_display[8]={0x00,0x3F|0x80,0x6D,0x3F,0x3F,0x3F|0x80,0x3F,0x3F};
+ 125          bit water_on;   //ÊÇ·ñ³öË® 1³öË® 0²»³öË®
+ 126          u16 water_v=0;  //³öË®Á¿
+ 127          u8 price;       //¼Û¸ñ
+ 128          sbit relay=P0^4;
+ 129          sbit buzzer=P0^6;
+ 130          u8 adc_val;
+ 131          void main()
+ 132          {
+ 133   1              All_Init();
+ 134   1              Timer0Init();
+ 135   1              while(1)
+ 136   1              {
+ 137   2                      on_display[4]=du[water_v/1000];
+ 138   2                      on_display[5]=du[water_v/100%10]|0x80;
+ 139   2                      on_display[6]=du[water_v/10%10];
+ 140   2                      on_display[7]=du[water_v%10];
+ 141   2                      
+ 142   2                      EA=0;
+ 143   2                      if(adc_val < 64)
+ 144   2                      {
+ 145   3                              P2=(P2&0x1f)|0x80;P0=~0x01;P2&=0x1f;
+ 146   3                      }
+ 147   2                      else
+ 148   2                      {
+ 149   3                              P2=(P2&0x1f)|0x80;P0=~0x00;P2&=0x1f;
+ 150   3                      }
+ 151   2                      EA=1;
+ 152   2                      if(water_v==10000)
+ 153   2                      {
+ 154   3                              water_on=0;
+ 155   3                              relay=0;buzzer=0;P2=(P2&0x1f)|0xa0;relay=0;buzzer=0;P2&=0x1f;
+ 156   3                              price=water_v/2;
+ 157   3                              off_display[4]=du[5];
+ 158   3                              off_display[5]=du[0]|0x80;
+ 159   3                              off_display[6]=du[0];
+ 160   3                              off_display[7]=du[0];
+ 161   3                      }
+ 162   2                      switch(btnkey)
+ 163   2                      {
+ 164   3                              case 1:                         //S7
+ 165   3                                      if(water_on==0)
+ 166   3                                      {
+ 167   4                                              water_v=0;
+ 168   4                                      }
+ 169   3                                      water_on=1;
+ 170   3                                      P2=(P2&0x1f)|0xa0;relay=1;buzzer=0;P2&=0x1f;
+ 171   3                                      btnkey=0;
+ 172   3                                      break;
+ 173   3                              case 2:                         //S6
+ 174   3                                      water_on=0;
+ 175   3                                      P2=(P2&0x1f)|0xa0;relay=0;buzzer=0;P2&=0x1f;
+ 176   3                                      price=water_v/2;
+ 177   3                                      off_display[4]=du[price/1000];
+C51 COMPILER V9.60.0.0   MAIN                                                              04/09/2021 13:07:34 PAGE 4   
+
+ 178   3                                      off_display[5]=du[price/100%10]|0x80;
+ 179   3                                      off_display[6]=du[price/10%10];
+ 180   3                                      off_display[7]=du[price%10];    
+ 181   3                                      btnkey=0;
+ 182   3                                      break;
+ 183   3                              case 3:                         //S5
+ 184   3                                      btnkey=0;
+ 185   3                                      break;
+ 186   3                              case 4:                         //S4
+ 187   3                                      btnkey=0;
+ 188   3                                      break;
+ 189   3                              default:
+ 190   3                              break;
+ 191   3                      }
+ 192   2              }
+ 193   1      }
+ 194          
+ 195          void time0() interrupt 1
+ 196          {
+ 197   1              static int smg_count=0,key_count=0,i=0,onesec_count=0,adc_count=0;
+ 198   1              smg_count++; key_count++;onesec_count++;adc_count++;
+ 199   1              if(key_count==8)
+ 200   1              {
+ 201   2                      btnkey=scanbtn();
+ 202   2                      key_count=0;
+ 203   2              }
+ 204   1              if(adc_count==200)
+ 205   1              {
+ 206   2                      adc_val=read_adc(0x01);
+ 207   2                      adc_count=0;
+ 208   2              }
+ 209   1              
+ 210   1              if(smg_count==1)
+ 211   1              {
+ 212   2                      smg_count=0;
+ 213   2                      P2=(P2&0x1f)|0xc0;P0=0x00;P2&=0x1f;
+ 214   2                      if(water_on)
+ 215   2                      {
+ 216   3                              P2=(P2&0x1f)|0xe0;P0=~on_display[i];P2&=0x1f;
+ 217   3                      }
+ 218   2                      else
+ 219   2                      {
+ 220   3                              P2=(P2&0x1f)|0xe0;P0=~off_display[i];P2&=0x1f;
+ 221   3                      }
+ 222   2                      
+ 223   2                      P2=(P2&0x1f)|0xc0;P0=wei[i];P2&=0x1f;
+ 224   2                      i++;
+ 225   2                      if(i==8) i=0;
+ 226   2              }
+ 227   1              
+ 228   1              if(onesec_count==10)
+ 229   1              {
+ 230   2                      onesec_count=0;
+ 231   2                      if(water_on)
+ 232   2                      {
+ 233   3                              water_v+=10;
+ 234   3                      }
+ 235   2              }
+ 236   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+C51 COMPILER V9.60.0.0   MAIN                                                              04/09/2021 13:07:34 PAGE 5   
+
+   CODE SIZE        =    911    ----
+   CONSTANT SIZE    =     18    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     35    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      1    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

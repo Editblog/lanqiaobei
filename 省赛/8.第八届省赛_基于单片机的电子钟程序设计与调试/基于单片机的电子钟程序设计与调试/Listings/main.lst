@@ -1,0 +1,482 @@
+C51 COMPILER V9.60.0.0   MAIN                                                              04/17/2021 11:18:28 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE INCDIR(.\driver) DEBUG OBJECTEXTEND PRIN
+                    -T(.\Listings\main.lst) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include <stc15f2k60s2.h>
+   2          #include "ds1302.h"
+   3          #include "onewire.h"
+   4          #define u8 unsigned char
+   5          #define u16 unsigned int
+   6                  
+   7          u8 code du[]={ 0x3F,0x06,0x5B,0x4F,0x66,0x6D,0x7D,0x07,0x7F,0x6F};
+   8          u8 wei[]={0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80};
+   9          sbit relay=P0^4;
+  10          sbit buzzer=P0^6;
+  11          void SysInit()
+  12          {
+  13   1              P2=(P2&0x1f)|0x80;P0=0xff;P2&=0x1f;
+  14   1              P2=(P2&0x1f)|0xa0;relay=0;buzzer=0;P2&=0x1f;
+  15   1              P2=(P2&0x1f)|0xc0;P0=0x00;P2&=0x1f;
+  16   1              P2=(P2&0x1f)|0xe0;P0=0xff;P2&=0x1f;
+  17   1      }
+  18          
+  19          void Timer0Init(void)           //1毫秒@11.0592MHz
+  20          {
+  21   1              AUXR |= 0x80;           //定时器时钟1T模式
+  22   1              TMOD &= 0xF0;           //设置定时器模式
+  23   1              TL0 = 0xCD;             //设置定时初值
+  24   1              TH0 = 0xD4;             //设置定时初值
+  25   1              TF0 = 0;                //清除TF0标志
+  26   1              TR0 = 1;                //定时器0开始计时
+  27   1              ET0=1;
+  28   1              EA=1;
+  29   1      }
+  30          
+  31          #define SetKeyBoard(x) P4 = (x>>3) | (x>>4);P3 = x 
+  32          #define GetKeyBoard() ((P4&0x10)<<3) | ((P4&0x04)<<4) | (P3&0x3F)
+  33          unsigned char Trg; 
+  34          unsigned char Cont; 
+  35          void KeyRead( void ) 
+  36          { 
+  37   1          unsigned char ReadData; 
+  38   1          SetKeyBoard(0x0f);
+  39   1          ReadData=GetKeyBoard(); 
+  40   1              SetKeyBoard(0xf0);
+  41   1          ReadData=(ReadData | GetKeyBoard())^0xff; 
+  42   1          Trg  = ReadData & (ReadData ^ Cont); 
+  43   1          Cont = ReadData; 
+  44   1      } 
+  45          
+  46          u8 shi,fen,miao;
+  47          u8 smg_time[8];
+  48          
+  49          u8 temp;
+  50          u8 smg_temperature[8];
+  51          u8 display_mode=1;      //1时钟显示   2 设置时间界面    3 设置闹钟界面    4温度显示界面
+  52          u8 smg_set_time[8];     //用于设置时间
+  53          u8 set_time_index=0;
+  54          u8 save_shi,save_fen,save_miao;
+C51 COMPILER V9.60.0.0   MAIN                                                              04/17/2021 11:18:28 PAGE 2   
+
+  55          
+  56          bit blink_flag=0;
+  57          bit key_flag=0;
+  58          bit led_blink_flag=0;
+  59          
+  60          u8 alarm_shi=0,alarm_fen=0,alarm_miao=0;
+  61          u8 led_blink_time=0;
+  62          u16 led_blink_count=0;
+  63          
+  64          u8 smg_set_alarm[8]={0x3F,0x3F,0x40,0x3F,0x3F,0x40,0x3F,0x3F};
+  65          void KeyProc(void) 
+  66          { 
+  67   1          if (Trg)  // 如果有按下 
+  68   1          {
+  69   2                      led_blink_flag=0;
+  70   2                      led_blink_time=0;
+  71   2                      led_blink_count=0;
+  72   2                      P2=(P2&0x1f)|0x80;P0=0xff;P2&=0x1f;
+  73   2              }
+  74   1              if(Trg==0x81)//S7
+  75   1              {
+  76   2                      if(display_mode==1)
+  77   2                      {
+  78   3                              display_mode=2; //进入时间设置界面
+  79   3                      }
+  80   2                      if(display_mode==2)
+  81   2                      {
+  82   3                              if(set_time_index==0)
+  83   3                              {
+  84   4                                      save_shi=(shi/16)*10+shi%16;
+  85   4                                      save_fen=(fen/16)*10+fen%16;
+  86   4                                      save_miao=(miao/16)*10+miao%16;
+  87   4                                      smg_set_time[0]=du[save_shi/10];smg_set_time[1]=du[save_shi%10];smg_set_time[2]=0x40;
+  88   4                                      smg_set_time[3]=du[save_fen/10];smg_set_time[4]=du[save_fen%10];smg_set_time[5]=0x40;
+  89   4                                      smg_set_time[6]=du[save_miao/10];smg_set_time[7]=du[save_miao%10];
+  90   4                              }
+  91   3                              set_time_index++;
+  92   3                              if(set_time_index==4)   //按到第四次返回时间显示界面，设置时间
+  93   3                              {
+  94   4                                      set_time_index=0;
+  95   4                                      display_mode=1;
+  96   4                              }
+  97   3                              set_srf(save_shi,save_fen,save_miao);
+  98   3                      }
+  99   2              }
+ 100   1              if(Trg==0x82)//S6
+ 101   1              {
+ 102   2                      if(display_mode==1)     
+ 103   2                      {
+ 104   3                              display_mode=3; //设置闹钟
+ 105   3                      }
+ 106   2                      if(display_mode==3)
+ 107   2                      {
+ 108   3                              set_time_index++;
+ 109   3                              if(set_time_index==4)   //按到第四次返回时间显示界面，设置闹钟
+ 110   3                              {
+ 111   4                                      set_time_index=0;
+ 112   4                                      display_mode=1;
+ 113   4                              }
+ 114   3                      }
+ 115   2              }
+ 116   1              if(Trg==0x84)//S5
+C51 COMPILER V9.60.0.0   MAIN                                                              04/17/2021 11:18:28 PAGE 3   
+
+ 117   1              {
+ 118   2                      if(display_mode==2)             //设置时间界面
+ 119   2                      {
+ 120   3                              if(set_time_index==1)
+ 121   3                              {
+ 122   4                                      if(save_shi<23)
+ 123   4                                      {
+ 124   5                                              save_shi++;
+ 125   5                                      }
+ 126   4                              }
+ 127   3                              if(set_time_index==2)
+ 128   3                              {
+ 129   4                                      if(save_fen<59)
+ 130   4                                      {
+ 131   5                                              save_fen++;
+ 132   5                                      }
+ 133   4                              }
+ 134   3                              if(set_time_index==3)
+ 135   3                              {
+ 136   4                                      if(save_miao<59)
+ 137   4                                      {
+ 138   5                                              save_miao++;
+ 139   5                                      }
+ 140   4                              }
+ 141   3                      }
+ 142   2                      
+ 143   2                      if(display_mode==3)             //设置闹钟界面
+ 144   2                      {
+ 145   3                              if(set_time_index==1)
+ 146   3                              {
+ 147   4                                      if(alarm_shi<23)
+ 148   4                                      {
+ 149   5                                              alarm_shi++;
+ 150   5                                      }
+ 151   4                              }
+ 152   3                              if(set_time_index==2)
+ 153   3                              {
+ 154   4                                      if(alarm_fen<59)
+ 155   4                                      {
+ 156   5                                              alarm_fen++;
+ 157   5                                      }
+ 158   4                              }
+ 159   3                              if(set_time_index==3)
+ 160   3                              {
+ 161   4                                      if(alarm_miao<59)
+ 162   4                                      {
+ 163   5                                              alarm_miao++;
+ 164   5                                      }
+ 165   4                              }
+ 166   3                      }
+ 167   2              }
+ 168   1              if(Trg==0x88)//S4
+ 169   1              {
+ 170   2                      if(display_mode==1)     //时间显示界面
+ 171   2                      {
+ 172   3                              display_mode=4;
+ 173   3                      }
+ 174   2                      
+ 175   2                      if(display_mode==2)             //设置时间界面
+ 176   2                      {
+ 177   3                              if(set_time_index==1)
+ 178   3                              {
+C51 COMPILER V9.60.0.0   MAIN                                                              04/17/2021 11:18:28 PAGE 4   
+
+ 179   4                                      if(save_shi>0)
+ 180   4                                      {
+ 181   5                                              save_shi--;
+ 182   5                                      }
+ 183   4                              }
+ 184   3                              if(set_time_index==2)
+ 185   3                              {
+ 186   4                                      if(save_fen>0)
+ 187   4                                      {
+ 188   5                                              save_fen--;
+ 189   5                                      }
+ 190   4                              }
+ 191   3                              if(set_time_index==3)
+ 192   3                              {
+ 193   4                                      if(save_miao>0)
+ 194   4                                      {
+ 195   5                                              save_miao--;
+ 196   5                                      }
+ 197   4                              }
+ 198   3                      }
+ 199   2                      
+ 200   2                      if(display_mode==3)             //设置闹钟界面
+ 201   2                      {
+ 202   3                              if(set_time_index==1)
+ 203   3                              {
+ 204   4                                      if(alarm_shi>0)
+ 205   4                                      {
+ 206   5                                              alarm_shi--;
+ 207   5                                      }
+ 208   4                              }
+ 209   3                              if(set_time_index==2)
+ 210   3                              {
+ 211   4                                      if(alarm_fen>0)
+ 212   4                                      {
+ 213   5                                              alarm_fen--;
+ 214   5                                      }
+ 215   4                              }
+ 216   3                              if(set_time_index==3)
+ 217   3                              {
+ 218   4                                      if(alarm_miao>0)
+ 219   4                                      {
+ 220   5                                              alarm_miao--;
+ 221   5                                      }
+ 222   4                              }
+ 223   3                      }
+ 224   2              }
+ 225   1              
+ 226   1          if (Cont)  // 如果按键被按着不放 
+ 227   1          { 
+ 228   2                      
+ 229   2          }
+ 230   1              
+ 231   1          if (Trg ==0 & Cont==0)  //按键放开  
+ 232   1          { 
+ 233   2             if(display_mode==4)      //如果是温度界面
+ 234   2                      {
+ 235   3                              display_mode=1; //切换时间界面
+ 236   3                      }
+ 237   2          } 
+ 238   1      } 
+ 239          
+ 240          void main()
+C51 COMPILER V9.60.0.0   MAIN                                                              04/17/2021 11:18:28 PAGE 5   
+
+ 241          {
+ 242   1              SysInit();
+ 243   1              set_srf(23,59,50);
+ 244   1              Timer0Init();
+ 245   1              smg_set_alarm[0]=du[alarm_shi/10];smg_set_alarm[0]=du[alarm_shi%10];
+ 246   1              smg_set_alarm[3]=du[alarm_fen/10];smg_set_alarm[4]=du[alarm_fen%10];
+ 247   1              smg_set_alarm[6]=du[alarm_miao/10];smg_set_alarm[7]=du[alarm_miao%10];
+ 248   1              while(1)
+ 249   1              {
+ 250   2                      EA=0;
+ 251   2                      miao=Read_Ds1302_Byte(0x81);
+ 252   2                      fen=Read_Ds1302_Byte(0x83);
+ 253   2                      shi=Read_Ds1302_Byte(0x85);
+ 254   2                      EA=1;
+ 255   2                      if(display_mode==1)
+ 256   2                      {
+ 257   3                              smg_time[0]=du[shi/16];smg_time[1]=du[shi%16];smg_time[2]=0x40;
+ 258   3                              smg_time[3]=du[fen/16];smg_time[4]=du[fen%16];smg_time[5]=0x40;
+ 259   3                              smg_time[6]=du[miao/16];smg_time[7]=du[miao%16];
+ 260   3                      }
+ 261   2                      if(display_mode==2)     //时钟设置界面
+ 262   2                      {
+ 263   3                              if(blink_flag)
+ 264   3                              {
+ 265   4                                      if(set_time_index==1)   //如果第一次·按下S7
+ 266   4                                      {
+ 267   5                                              smg_set_time[0]=du[save_shi/10];smg_set_time[1]=du[save_shi%10];
+ 268   5                                      }
+ 269   4                                      if(set_time_index==2)   //如果第二次·按下S7
+ 270   4                                      {
+ 271   5                                              smg_set_time[3]=du[save_fen/10];smg_set_time[4]=du[save_fen%10];
+ 272   5                                      }
+ 273   4                                      if(set_time_index==3)   //如果第三次·按下S7
+ 274   4                                      {
+ 275   5                                              smg_set_time[6]=du[save_miao/10];smg_set_time[7]=du[save_miao%10];
+ 276   5                                      }
+ 277   4                              }
+ 278   3                              else
+ 279   3                              {
+ 280   4                                      if(set_time_index==1)   //如果第一次·按下S7
+ 281   4                                      {
+ 282   5                                              smg_set_time[0]=0x00;smg_set_time[1]=0x00;
+ 283   5                                      }
+ 284   4                                      else
+ 285   4                                      {
+ 286   5                                              smg_set_time[0]=du[save_shi/10];smg_set_time[1]=du[save_shi%10];
+ 287   5                                      }
+ 288   4                                      if(set_time_index==2)   //如果第二次·按下S7
+ 289   4                                      {
+ 290   5                                              smg_set_time[3]=0x00;smg_set_time[4]=0x00;
+ 291   5                                      }
+ 292   4                                      else
+ 293   4                                      {
+ 294   5                                              smg_set_time[3]=du[save_fen/10];smg_set_time[4]=du[save_fen%10];
+ 295   5                                      }
+ 296   4                                      if(set_time_index==3)   //如果第三次·按下S7
+ 297   4                                      {
+ 298   5                                              smg_set_time[6]=0x00;smg_set_time[7]=0x00;
+ 299   5                                      }
+ 300   4                                      else
+ 301   4                                      {
+ 302   5                                              smg_set_time[6]=du[save_miao/10];smg_set_time[7]=du[save_miao%10];
+C51 COMPILER V9.60.0.0   MAIN                                                              04/17/2021 11:18:28 PAGE 6   
+
+ 303   5                                      }
+ 304   4                              }
+ 305   3                      }
+ 306   2                      
+ 307   2                      if(display_mode==3)     //闹钟设置界面
+ 308   2                      {
+ 309   3                              if(blink_flag)
+ 310   3                              {
+ 311   4                                      if(set_time_index==1)   //如果第一次·按下S7
+ 312   4                                      {
+ 313   5                                              smg_set_alarm[0]=du[alarm_shi/10];smg_set_alarm[1]=du[alarm_shi%10];
+ 314   5                                      }
+ 315   4                                      if(set_time_index==2)   //如果第二次·按下S7
+ 316   4                                      {
+ 317   5                                              smg_set_alarm[3]=du[alarm_fen/10];smg_set_alarm[4]=du[alarm_fen%10];
+ 318   5                                      }
+ 319   4                                      if(set_time_index==3)   //如果第三次·按下S7
+ 320   4                                      {
+ 321   5                                              smg_set_alarm[6]=du[alarm_miao/10];smg_set_alarm[7]=du[alarm_miao%10];
+ 322   5                                      }
+ 323   4                              }
+ 324   3                              else
+ 325   3                              {
+ 326   4                                      if(set_time_index==1)   //如果第一次·按下S7
+ 327   4                                      {
+ 328   5                                              smg_set_alarm[0]=0x00;smg_set_alarm[1]=0x00;
+ 329   5                                      }
+ 330   4                                      else
+ 331   4                                      {
+ 332   5                                              smg_set_alarm[0]=du[alarm_shi/10];smg_set_alarm[1]=du[alarm_shi%10];
+ 333   5                                      }
+ 334   4                                      if(set_time_index==2)   //如果第二次·按下S7
+ 335   4                                      {
+ 336   5                                              smg_set_alarm[3]=0x00;smg_set_alarm[4]=0x00;
+ 337   5                                      }
+ 338   4                                      else
+ 339   4                                      {
+ 340   5                                              smg_set_alarm[3]=du[alarm_fen/10];smg_set_alarm[4]=du[alarm_fen%10];
+ 341   5                                      }
+ 342   4                                      if(set_time_index==3)   //如果第三次·按下S7
+ 343   4                                      {
+ 344   5                                              smg_set_alarm[6]=0x00;smg_set_alarm[7]=0x00;
+ 345   5                                      }
+ 346   4                                      else
+ 347   4                                      {
+ 348   5                                              smg_set_alarm[6]=du[alarm_miao/10];smg_set_alarm[7]=du[alarm_miao%10];
+ 349   5                                      }
+ 350   4                              }
+ 351   3                      }
+ 352   2                      
+ 353   2                      
+ 354   2                      temp=(u8)rd_temperature_f();
+ 355   2                      smg_temperature[5]=du[temp/10];smg_temperature[6]=du[temp%10];smg_temperature[7]=0x39;
+ 356   2                      
+ 357   2                      if(key_flag)
+ 358   2                      {
+ 359   3                              key_flag=0;
+ 360   3                              KeyRead();
+ 361   3                              KeyProc();
+ 362   3                      }
+ 363   2                      
+ 364   2                      if((shi==alarm_shi)&&(fen==alarm_fen)&&(miao==alarm_miao))
+C51 COMPILER V9.60.0.0   MAIN                                                              04/17/2021 11:18:28 PAGE 7   
+
+ 365   2                      {
+ 366   3                              if(display_mode==1)
+ 367   3                              {
+ 368   4                                      led_blink_flag=1;
+ 369   4                              }
+ 370   3                      }
+ 371   2              }
+ 372   1      }
+ 373          
+ 374          
+ 375          void time0() interrupt 1
+ 376          {
+ 377   1              static int smg_count=0,key_count=0,i=0,blink_count=0;
+ 378   1              smg_count++;key_count++;blink_count++;
+ 379   1              if(key_count==10)
+ 380   1              {
+ 381   2                      key_count=0;
+ 382   2                      key_flag=1;
+ 383   2              }
+ 384   1              
+ 385   1              if(smg_count==2)
+ 386   1              {
+ 387   2                      smg_count=0;
+ 388   2                      P2=(P2&0x1f)|0xc0;P0=0x00;P2&=0x1f;
+ 389   2                      if(display_mode==1)
+ 390   2                      {
+ 391   3                              P2=(P2&0x1f)|0xe0;P0=~smg_time[i];P2&=0x1f;
+ 392   3                      }
+ 393   2                      if(display_mode==2)
+ 394   2                      {
+ 395   3                              P2=(P2&0x1f)|0xe0;P0=~smg_set_time[i];P2&=0x1f;
+ 396   3                      }
+ 397   2                      if(display_mode==3)
+ 398   2                      {
+ 399   3                              P2=(P2&0x1f)|0xe0;P0=~smg_set_alarm[i];P2&=0x1f;
+ 400   3                      }
+ 401   2                      if(display_mode==4)
+ 402   2                      {
+ 403   3                              P2=(P2&0x1f)|0xe0;P0=~smg_temperature[i];P2&=0x1f;
+ 404   3                      }
+ 405   2                      
+ 406   2                      P2=(P2&0x1f)|0xc0;P0=wei[i];P2&=0x1f;P0=0xff;
+ 407   2                      i++;
+ 408   2                      if(i==8)  i=0;
+ 409   2              }
+ 410   1              
+ 411   1              if(blink_count==1000)
+ 412   1              {
+ 413   2                      blink_count=0;
+ 414   2                      blink_flag=!blink_flag;
+ 415   2              }
+ 416   1              
+ 417   1              if(led_blink_flag)
+ 418   1              {
+ 419   2                      led_blink_count++;
+ 420   2                      if(led_blink_count<200)
+ 421   2                      {
+ 422   3                              P2=(P2&0x1f)|0x80;P0=~0x01;P2&=0x1f;
+ 423   3                      }
+ 424   2                      else
+ 425   2                      {
+ 426   3                              if(led_blink_count<400)
+C51 COMPILER V9.60.0.0   MAIN                                                              04/17/2021 11:18:28 PAGE 8   
+
+ 427   3                              {
+ 428   4                                      P2=(P2&0x1f)|0x80;P0=0xff;P2&=0x1f;
+ 429   4                              }
+ 430   3                              else
+ 431   3                              {
+ 432   4                                      led_blink_time++;
+ 433   4                                      led_blink_count=0;
+ 434   4                                      if(led_blink_time==12)
+ 435   4                                      {
+ 436   5                                              led_blink_time=0;
+ 437   5                                              led_blink_flag=0;
+ 438   5                                      }
+ 439   4                              }
+ 440   3                      }
+ 441   2                      
+ 442   2              }
+ 443   1              
+ 444   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1676    ----
+   CONSTANT SIZE    =     10    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     65    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      3    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

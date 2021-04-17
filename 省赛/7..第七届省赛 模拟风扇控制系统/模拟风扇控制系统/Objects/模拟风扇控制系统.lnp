@@ -1,0 +1,4 @@
+".\Objects\main.obj",
+".\Objects\onewire.obj" 
+TO ".\Objects\模拟风扇控制系统" 
+PRINT(".\Listings\模拟风扇控制系统.m51") RAMSIZE(256) 

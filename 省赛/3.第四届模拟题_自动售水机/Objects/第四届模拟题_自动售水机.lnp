@@ -1,0 +1,4 @@
+".\Objects\main.obj",
+".\Objects\iic.obj" 
+TO ".\Objects\第四届模拟题_自动售水机" 
+PRINT(".\Listings\第四届模拟题_自动售水机.m51") RAMSIZE(256) 

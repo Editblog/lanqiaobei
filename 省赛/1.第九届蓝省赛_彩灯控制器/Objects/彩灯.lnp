@@ -1,0 +1,5 @@
+".\Objects\main.obj",
+".\Objects\iic.obj",
+".\Objects\led.obj" 
+TO ".\Objects\²ÊµÆ" 
+PRINT(".\Listings\²ÊµÆ.m51") RAMSIZE(256) 

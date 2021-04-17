@@ -1,0 +1,295 @@
+C51 COMPILER V9.60.0.0   MAIN                                                              04/12/2021 15:04:17 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE INCDIR(.\driver) DEBUG OBJECTEXTEND PRIN
+                    -T(.\Listings\main.lst) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include <stc15f2k60s2.h>
+   2          #include "onewire.h"
+   3          #define u8 unsigned char 
+   4          #define u16 unsigned int
+   5                  
+   6          u8 code du[]={0x3F,0x06,0x5B,0x4F,0x66,0x6D,0x7D,0x07,0x7F,0x6F};
+   7          u8 code wei[]={0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80};
+   8          sbit relay=P0^4;
+   9          sbit buzzer=P0^6;
+  10          void SysInit()
+  11          {
+  12   1              P2=(P2&0x1f)|0x80;P0=0xff;P2&=0x1f;
+  13   1              P2=(P2&0x1f)|0xa0;relay=0;buzzer=0;P2&=0x1f;
+  14   1              P2=(P2&0x1f)|0xc0;P0=0x00;P2&=0x1f;
+  15   1              P2=(P2&0x1f)|0xe0;P0=0xff;P2&=0x1f;
+  16   1      }
+  17          
+  18          
+  19          void Timer0Init(void)           //1ºÁÃë@11.0592MHz
+  20          {
+  21   1              AUXR |= 0x80;           //¶¨Ê±Æ÷Ê±ÖÓ1TÄ£Ê½
+  22   1              TMOD &= 0xF0;           //ÉèÖÃ¶¨Ê±Æ÷Ä£Ê½
+  23   1              TL0 = 0xAE;             //ÉèÖÃ¶¨Ê±³õÖµ
+  24   1              TH0 = 0xFB;             //ÉèÖÃ¶¨Ê±³õÖµ
+  25   1              TF0 = 0;                //Çå³ýTF0±êÖ¾
+  26   1              TR0 = 1;                //¶¨Ê±Æ÷0¿ªÊ¼¼ÆÊ±
+  27   1              ET0=1;
+  28   1              EA=1;
+  29   1      }
+  30          
+  31          //---------------------------ËÄ¸ö¶ÀÁ¢°´¼ü--------------------------------
+  32          #define btn_io P3
+  33          #define btn_state_0 0     //ÊÇ·ñ°´ÏÂ
+  34          #define btn_state_1 1    //ÊÇ·ñÊÇ¶¶¶¯
+  35          #define btn_state_2 2     //ÅÐ¶¨°´¼üÓÐÐ§µÄÖÖÀà
+  36          #define btn_state_3 3     //µÈ´ý°´¼üÊÍ·Å
+  37          #define btn_mask 0x0f     //ÆÁ±Î²»ÐèÒªµÄIO
+  38          #define LONG_KEY_TIME 300 //LONG_KEY_TIME*10MS = 3S
+  39          #define SINGLE_KEY_TIME 3 //SINGLE_KEY_TIME*10MS = 30MS
+  40          char btnkey;
+  41          char scanbtn(void)
+  42          {
+  43   1              static char btn_state = 0;
+  44   1              static int key_time; //°´¼ü¼ÆÊ±±äÁ¿     
+  45   1              static char key_value=0;
+  46   1              char btn_press,btn_return = 0;
+  47   1              btn_press = btn_io & btn_mask;
+  48   1              switch(btn_state)
+  49   1              {
+  50   2                      case btn_state_0:
+  51   2                              key_value=0;
+  52   2                              if(btn_press != btn_mask){
+  53   3                                      key_time = 0; // ÇåÁãÊ±¼ä¼ä¸ô¼ÆÊý
+  54   3                                      btn_state = btn_state_1;
+C51 COMPILER V9.60.0.0   MAIN                                                              04/12/2021 15:04:17 PAGE 2   
+
+  55   3                              }
+  56   2                              break;
+  57   2                      case btn_state_1:
+  58   2                              if(btn_press != btn_mask)
+  59   2                              {
+  60   3                                      key_time++; // Ò»´Î10ms
+  61   3                                      if (key_time >= SINGLE_KEY_TIME) // Ïû¶¶Ê±¼äÎª£ºSINGLE_KEY_TIME*10ms = 30ms;
+  62   3                                      {
+  63   4                                              btn_state = btn_state_2;
+  64   4                                      }
+  65   3                              }
+  66   2                              else
+  67   2                                      btn_state = btn_state_0;
+  68   2                              break;
+  69   2                      case btn_state_2:
+  70   2                              if(btn_press == btn_mask)
+  71   2                              {
+  72   3                                      btn_return=key_value;
+  73   3                                      key_value=0;
+  74   3                                      btn_state = btn_state_0; // È¥×´Ì¬3£¬µÈ´ý°´¼üÊÍ·Å
+  75   3                              }
+  76   2                              else
+  77   2                              {
+  78   3                                      if(btn_press == 0x0e) key_value = 1;
+  79   3                                      if(btn_press == 0x0d) key_value = 2;
+  80   3                                      if(btn_press == 0x0b) key_value = 3;
+  81   3                                      if(btn_press == 0x07) key_value = 4;
+  82   3      
+  83   3                                      key_time++;
+  84   3      
+  85   3                                      if (key_time >= LONG_KEY_TIME) // Èç¹û°´¼üÊ±¼ä³¬¹ý Éè¶¨µÄ³¤°´Ê±¼ä£¨LONG_KEY_TIME*10ms=200*10ms=2000ms£
+             -©, ÔòÅÐ¶¨Îª ³¤°´
+  86   3                                      {
+  87   4                                              btn_return =key_value|0x80;
+  88   4                                              key_value=0;
+  89   4                                              btn_state = btn_state_3; // È¥×´Ì¬3£¬µÈ´ý°´¼üÊÍ·Å
+  90   4                                      }
+  91   3                              }
+  92   2                              break;
+  93   2                      case btn_state_3:
+  94   2                              if(btn_press == 0x0f)   btn_state = btn_state_0;
+  95   2                              break;
+  96   2                      default:
+  97   2                      break;
+  98   2              }
+  99   1              return  btn_return;
+ 100   1      }
+ 101          
+ 102          u8 work_display[8];
+ 103          u8 mode=1;
+ 104          u16 work_time;
+ 105          u8 S5_count=0;
+ 106          bit output_flag=1;
+ 107          u8 temp_mode=0;
+ 108          u8 temp_display[8]={0x40,0x66,0x40,0x00,0x00,0x00,0x00,0x39};
+ 109          u8 temperature;
+ 110          void main()
+ 111          {
+ 112   1              SysInit();
+ 113   1              Timer0Init();
+ 114   1              while(1)
+ 115   1              {
+C51 COMPILER V9.60.0.0   MAIN                                                              04/12/2021 15:04:17 PAGE 3   
+
+ 116   2                      work_display[0]=0x40;work_display[1]=du[mode];work_display[2]=0x40;
+ 117   2                      work_display[3]=0x00;work_display[4]=du[0];work_display[5]=du[work_time/100];
+ 118   2                      work_display[6]=du[work_time/10%10];work_display[7]=du[work_time%10];
+ 119   2                      
+ 120   2                      if(temp_mode)
+ 121   2                      {
+ 122   3                              temperature=rd_temperature_f();
+ 123   3                              temp_display[5]=du[temperature/10];temp_display[6]=du[temperature%10];
+ 124   3                      }
+ 125   2                      
+ 126   2                      if(work_time==0)
+ 127   2                      {
+ 128   3                              output_flag=0;
+ 129   3                      }
+ 130   2                      else
+ 131   2                      {
+ 132   3                              output_flag=1;
+ 133   3                      }
+ 134   2                      
+ 135   2                      switch(btnkey)
+ 136   2                      {
+ 137   3                              case 1:         //S7
+ 138   3                                      temp_mode++;
+ 139   3                                      if(temp_mode==2)        temp_mode=0;
+ 140   3                                      btnkey=0xff;
+ 141   3                                      break;
+ 142   3                              case 2:         //S6
+ 143   3                                      work_time=0;
+ 144   3                                      output_flag=0;
+ 145   3                                      btnkey=0xff;
+ 146   3                                      break;
+ 147   3                              case 3:         //S5
+ 148   3                                      S5_count++;
+ 149   3                                      if(S5_count==3) 
+ 150   3                                      {       
+ 151   4                                              S5_count=0;
+ 152   4                                              work_time=0;
+ 153   4                                      }
+ 154   3                                      if(S5_count==1) work_time=60;
+ 155   3                                      if(S5_count==2) work_time=120;
+ 156   3                                      btnkey=0xff;
+ 157   3                                      break;
+ 158   3                              case 4:         //S4
+ 159   3                                      mode++;
+ 160   3                                      if(mode==4)
+ 161   3                                      {
+ 162   4                                              mode=1;
+ 163   4                                      }
+ 164   3                                      btnkey=0xff;
+ 165   3                                      break;
+ 166   3                      }       
+ 167   2                      if(mode==1)
+ 168   2                      {
+ 169   3                              P2=(P2&0x1f)|0x80;P0=~0x01;P2&=0x1f;
+ 170   3                      }
+ 171   2                      if(mode==2)
+ 172   2                      {
+ 173   3                              P2=(P2&0x1f)|0x80;P0=~0x02;P2&=0x1f;
+ 174   3                      }
+ 175   2                      if(mode==3)
+ 176   2                      {
+ 177   3                              P2=(P2&0x1f)|0x80;P0=~0x04;P2&=0x1f;
+C51 COMPILER V9.60.0.0   MAIN                                                              04/12/2021 15:04:17 PAGE 4   
+
+ 178   3                      }
+ 179   2              }
+ 180   1      }
+ 181          
+ 182          void time0() interrupt 1        //100us
+ 183          {
+ 184   1              static smg_count=0,key_count=0,i=0,pwm_count=0,time_count=0;
+ 185   1              smg_count++; key_count++;pwm_count++;time_count++;
+ 186   1              
+ 187   1              if(key_count==100)
+ 188   1              {
+ 189   2                      btnkey=scanbtn();
+ 190   2                      key_count=0;
+ 191   2              }
+ 192   1              
+ 193   1              if(smg_count==20)
+ 194   1              {
+ 195   2                      smg_count=0;
+ 196   2                      P2=(P2&0x1f)|0xc0;P0=0x00;P2&=0x1f;
+ 197   2                      if(temp_mode==1)
+ 198   2                      {
+ 199   3                              P2=(P2&0x1f)|0xe0;P0=~temp_display[i];P2&=0x1f;
+ 200   3                      }
+ 201   2                      else
+ 202   2                      {
+ 203   3                              P2=(P2&0x1f)|0xe0;P0=~work_display[i];P2&=0x1f;
+ 204   3                      }
+ 205   2                      P2=(P2&0x1f)|0xc0;P0=wei[i];P2&=0x1f;P0=0xff;
+ 206   2                      i++;
+ 207   2                      if(i==8) i=0;
+ 208   2              }
+ 209   1              
+ 210   1              if(time_count==10000)
+ 211   1              {
+ 212   2                      time_count=0;
+ 213   2                      if(work_time>0) work_time--;
+ 214   2              }
+ 215   1              
+ 216   1              if(output_flag)
+ 217   1              {
+ 218   2                      if(mode==1)
+ 219   2                      {
+ 220   3                              if(pwm_count==8)
+ 221   3                              {
+ 222   4                                      P34=1;
+ 223   4                              }
+ 224   3                              if(pwm_count==10)
+ 225   3                              {
+ 226   4                                      P34=0;
+ 227   4                                      pwm_count=0;
+ 228   4                              }
+ 229   3                      }
+ 230   2                      if(mode==2)
+ 231   2                      {
+ 232   3                              if(pwm_count==7)
+ 233   3                              {
+ 234   4                                      P34=1;
+ 235   4                              }
+ 236   3                              if(pwm_count==10)
+ 237   3                              {
+ 238   4                                      P34=0;
+ 239   4                                      pwm_count=0;
+C51 COMPILER V9.60.0.0   MAIN                                                              04/12/2021 15:04:17 PAGE 5   
+
+ 240   4                              }
+ 241   3                      }
+ 242   2                      if(mode==3)
+ 243   2                      {
+ 244   3                              if(pwm_count==3)
+ 245   3                              {
+ 246   4                                      P34=1;
+ 247   4                              }
+ 248   3                              if(pwm_count==10)
+ 249   3                              {
+ 250   4                                      P34=0;
+ 251   4                                      pwm_count=0;
+ 252   4                              }
+ 253   3                      }
+ 254   2              }
+ 255   1              else
+ 256   1              {
+ 257   2                      P34=0;
+ 258   2                      pwm_count=0;
+ 259   2                      time_count=0;
+ 260   2              }
+ 261   1      }
+ 262          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    940    ----
+   CONSTANT SIZE    =     18    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     37    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      1    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

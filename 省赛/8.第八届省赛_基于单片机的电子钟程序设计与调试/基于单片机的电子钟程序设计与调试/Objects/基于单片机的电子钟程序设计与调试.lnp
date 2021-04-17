@@ -1,0 +1,5 @@
+".\Objects\main.obj",
+".\Objects\ds1302.obj",
+".\Objects\onewire.obj" 
+TO ".\Objects\基于单片机的电子钟程序设计与调试" 
+PRINT(".\Listings\基于单片机的电子钟程序设计与调试.m51") RAMSIZE(256) 

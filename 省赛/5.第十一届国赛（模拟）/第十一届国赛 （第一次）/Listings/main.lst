@@ -1,0 +1,505 @@
+C51 COMPILER V9.60.0.0   MAIN                                                              04/11/2021 11:34:11 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE INCDIR(.\driver) DEBUG OBJECTEXTEND PRIN
+                    -T(.\Listings\main.lst) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include <stc15f2k60s2.h>
+   2          #include "ds1302.h"
+   3          #include "onewire.h"
+   4          #include "iic.h"
+   5          #include "led.h"
+   6          #define u8 unsigned char
+   7          #define u16 unsigned int 
+   8                  
+   9          sbit relay=P0^4;
+  10          sbit buzzer=P0^6;
+  11          
+  12          u8 code du[]={0x3F,0x06,0x5B,0x4F,0x66,0x6D,0x7D,0x07,0x7F,0x6F};
+  13          u8 code wei[]={0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80};
+  14          
+  15          void Timer0Init(void)           //1毫秒@12.000MHz
+  16          {
+  17   1              AUXR |= 0x80;           //定时器时钟1T模式
+  18   1              TMOD &= 0xF0;           //设置定时器模式
+  19   1              TL0 = 0x20;             //设置定时初值
+  20   1              TH0 = 0xD1;             //设置定时初值
+  21   1              TF0 = 0;                //清除TF0标志
+  22   1              TR0 = 1;                //定时器0开始计时
+  23   1              ET0=1;
+  24   1              EA=1;
+  25   1      }
+  26          
+  27          
+  28          #define KEY P3
+  29          #define NO_KEY          0xff    
+  30          #define KEY_STATE0  0           
+  31          #define KEY_STATE1  1           
+  32          #define KEY_STATE2  2 
+  33          u8 key_val;
+  34          u8 Key_Scan()
+  35          {
+  36   1              static unsigned char key_state=KEY_STATE0; 
+  37   1              u8 key_value=0,key_temp;                                   
+  38   1              u8 key1,key2;
+  39   1      
+  40   1              P30=0;P31=0;P32=0;P33=0;P34=1;P35=1;P42=1;P44=1;
+  41   1              if(P44==0)      key1=0x70;
+  42   1              if(P42==0)      key1=0xb0;
+  43   1              if(P35==0)      key1=0xd0;
+  44   1              if(P34==0)      key1=0xe0;
+  45   1              if((P34==1)&&(P35==1)&&(P42==1)&&(P44==1))      key1=0xf0;
+  46   1      
+  47   1              P30=1;P31=1;P32=1;P33=1;P34=0;P35=0;P42=0;P44=0;
+  48   1              if(P30==0)      key2=0x0e;
+  49   1              if(P31==0)      key2=0x0d;
+  50   1              if(P32==0)      key2=0x0b;
+  51   1              if(P33==0)      key2=0x07;
+  52   1              if((P30==1)&&(P31==1)&&(P32==1)&&(P33==1))      key2=0x0f;
+  53   1              key_temp=key1|key2;
+  54   1      
+C51 COMPILER V9.60.0.0   MAIN                                                              04/11/2021 11:34:11 PAGE 2   
+
+  55   1              switch(key_state)                             
+  56   1              {
+  57   2                      case KEY_STATE0:                                
+  58   2                              if(key_temp!=NO_KEY)
+  59   2                              {
+  60   3                                      key_state=KEY_STATE1;      
+  61   3                              }
+  62   2                              break;
+  63   2      
+  64   2                      case KEY_STATE1:                                
+  65   2                              if(key_temp==NO_KEY)            
+  66   2                              {
+  67   3                                      key_state=KEY_STATE0;   
+  68   3                              }
+  69   2                              else                                            
+  70   2                              {
+  71   3                                      switch(key_temp)                             
+  72   3                                      {
+  73   4                                              case 0x77: key_value=4;break;
+  74   4                                              case 0x7b: key_value=5;break;
+  75   4                                              case 0x7d: key_value=6;break;
+  76   4                                              case 0x7e: key_value=7;break;
+  77   4      
+  78   4                                              case 0xb7: key_value=8;break;
+  79   4                                              case 0xbb: key_value=9;break;
+  80   4                                              case 0xbd: key_value=10;break;
+  81   4                                              case 0xbe: key_value=11;break;
+  82   4      
+  83   4                                              case 0xd7: key_value=12;break;
+  84   4                                              case 0xdb: key_value=13;break;
+  85   4                                              case 0xdd: key_value=14;break;
+  86   4                                              case 0xde: key_value=15;break;
+  87   4      
+  88   4                                              case 0xe7: key_value=16;break;
+  89   4                                              case 0xeb: key_value=17;break;
+  90   4                                              case 0xed: key_value=18;break;
+  91   4                                              case 0xee: key_value=19;break;  
+  92   4                                      }
+  93   3                                      key_state=KEY_STATE2;
+  94   3                              }
+  95   2                              break;
+  96   2      
+  97   2                      case KEY_STATE2:                        
+  98   2                              if(key_temp==NO_KEY)
+  99   2                              {
+ 100   3                                      key_state=KEY_STATE0;
+ 101   3                              }
+ 102   2                              break;
+ 103   2              }
+ 104   1              return key_value;
+ 105   1      }
+ 106          
+ 107          
+ 108          
+ 109          void SysInit()
+ 110          {
+ 111   1              P2=(P2&0x1f)|0x80;P0=0xff;P2&=0x1f;
+ 112   1              
+ 113   1              P2=(P2&0x1f)|0xa0;relay=0;buzzer=0;P2&=0x1f;
+ 114   1              
+ 115   1              P2=(P2&0x1f)|0xc0;P0=0x00;P2&=0x1f;
+ 116   1              
+C51 COMPILER V9.60.0.0   MAIN                                                              04/11/2021 11:34:11 PAGE 3   
+
+ 117   1              P2=(P2&0x1f)|0xe0;P0=0xff;P2&=0x1f;
+ 118   1      }
+ 119          
+ 120          u8 smg_time[8];
+ 121          u8 shi,fen,miao;
+ 122          u8 smg_temp[8]={0x39,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+ 123          u8 smg_adc[8]={0x79,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+ 124          u16 temp=80;
+ 125          u16 adc_val;
+ 126          bit adc_flag;
+ 127          bit adc_01=0;
+ 128          
+ 129          u8 set_mode[8]={0x73,0x06,0x00,0x00,0x00,0x00,0x00,0x00};       //设置模式
+ 130          
+ 131          u8 mode=0;      //切换界面
+ 132          u8 shuju_mode=0;        
+ 133          u8 canshu_mode=0;
+ 134          
+ 135          char set_temp=25;
+ 136          char set_led=4;
+ 137          char set_time=17;
+ 138          
+ 139          char set_buf_temp=25;
+ 140          char set_buf_led=4;
+ 141          char set_buf_time=17;
+ 142          u8 test;
+ 143          
+ 144          bit led_on_flag=0;
+ 145          bit led_off_flag=0;
+ 146          
+ 147          u16 led_count1=0,led_count0=0;  //判断亮暗led
+ 148          void main()
+ 149          {
+ 150   1              Timer0Init();
+ 151   1              SysInit();
+ 152   1              set_sfm(16,59,50);
+ 153   1              while(1)
+ 154   1              {
+ 155   2                      EA=0;
+ 156   2                      miao=Read_Ds1302_Byte(0x81);
+ 157   2                      fen=Read_Ds1302_Byte(0x83);
+ 158   2                      shi=Read_Ds1302_Byte(0x85);
+ 159   2                      EA=1;
+ 160   2                      
+ 161   2                      smg_time[0]=du[shi/16];
+ 162   2                      smg_time[1]=du[shi%16];
+ 163   2                      smg_time[2]=0x40;
+ 164   2                      smg_time[3]=du[fen/16];
+ 165   2                      smg_time[4]=du[fen%16];
+ 166   2                      smg_time[5]=0x40;
+ 167   2                      smg_time[6]=du[miao/16];
+ 168   2                      smg_time[7]=du[miao%16];
+ 169   2                      
+ 170   2                      //test=(shi/16)*10+(shi%16);//十进制时间
+ 171   2                      
+ 172   2                      if(adc_flag)
+ 173   2                      {
+ 174   3                              adc_flag=0;
+ 175   3                              temp=rd_temperature_f();
+ 176   3                              smg_temp[5]=du[temp/100];
+ 177   3                              smg_temp[6]=du[temp/10%10]|0x80;
+ 178   3                              smg_temp[7]=du[temp%10];
+C51 COMPILER V9.60.0.0   MAIN                                                              04/11/2021 11:34:11 PAGE 4   
+
+ 179   3                              
+ 180   3                              adc_val=(read_adc(0x01)/255.0f*500);
+ 181   3                              smg_adc[2]=du[adc_val/100]|0x80;
+ 182   3                              smg_adc[3]=du[adc_val/10%10];
+ 183   3                              smg_adc[4]=du[adc_val%10];
+ 184   3                              
+ 185   3                              if(adc_val > 80)
+ 186   3                              {
+ 187   4                                      adc_01=1;
+ 188   4                              }
+ 189   3                              else
+ 190   3                              {
+ 191   4                                      adc_01=0;
+ 192   4                              }
+ 193   3                              smg_adc[7]=du[adc_01];
+ 194   3                      }
+ 195   2                              
+ 196   2                      switch(key_val)
+ 197   2                      {
+ 198   3                              case 4: 
+ 199   3                                      mode++;
+ 200   3                                      if(mode==2)
+ 201   3                                      {
+ 202   4                                              mode=0;
+ 203   4                                              set_time=set_buf_time;
+ 204   4                                              set_temp=set_buf_temp;
+ 205   4                                              set_led=set_buf_led;
+ 206   4                                              shuju_mode=0;
+ 207   4                                      }
+ 208   3                                      if(mode==1)             //参数界面
+ 209   3                                      {
+ 210   4                                              canshu_mode=0;
+ 211   4                                              set_mode[6]=du[set_time/10];
+ 212   4                                              set_mode[7]=du[set_time/10];
+ 213   4                                      }
+ 214   3                                      key_val=0;
+ 215   3                                      break;
+ 216   3                              case 5:
+ 217   3                                      if(mode==1)             //参数界面
+ 218   3                                      {
+ 219   4                                              canshu_mode++;
+ 220   4                                              if(canshu_mode==3)
+ 221   4                                              {
+ 222   5                                                      canshu_mode=0;
+ 223   5                                              }
+ 224   4                                              if(canshu_mode==0)
+ 225   4                                              {
+ 226   5                                                      set_mode[1]=du[1];
+ 227   5                                                      set_mode[6]=du[set_time/10];
+ 228   5                                                      set_mode[7]=du[set_time%10];
+ 229   5                                              }
+ 230   4                                              if(canshu_mode==1)
+ 231   4                                              {
+ 232   5                                                      set_mode[1]=du[2];
+ 233   5                                                      set_mode[6]=du[set_temp/10];
+ 234   5                                                      set_mode[7]=du[set_temp%10];
+ 235   5                                              }
+ 236   4                                              if(canshu_mode==2)
+ 237   4                                              {
+ 238   5                                                      set_mode[1]=du[3];
+ 239   5                                                      set_mode[6]=0x00;
+ 240   5                                                      set_mode[7]=du[set_led];
+C51 COMPILER V9.60.0.0   MAIN                                                              04/11/2021 11:34:11 PAGE 5   
+
+ 241   5                                              }
+ 242   4                                      }
+ 243   3                                      else                    //数据界面
+ 244   3                                      {
+ 245   4                                              shuju_mode++;
+ 246   4                                              if(shuju_mode==3)
+ 247   4                                              {
+ 248   5                                                      shuju_mode=0;
+ 249   5                                              }
+ 250   4                                      }
+ 251   3                                      key_val=0;
+ 252   3                                      break;
+ 253   3                              case 8:                 //减
+ 254   3                                      if(mode==1)
+ 255   3                                      {
+ 256   4                                              if(canshu_mode==0)
+ 257   4                                              {
+ 258   5                                                      set_buf_time--;
+ 259   5                                                      if(set_buf_time<0)
+ 260   5                                                      {
+ 261   6                                                              set_buf_time=0;
+ 262   6                                                      }
+ 263   5                                                      set_mode[6]=du[set_buf_time/10];
+ 264   5                                                      set_mode[7]=du[set_buf_time%10];
+ 265   5                                              }
+ 266   4                                              if(canshu_mode==1)
+ 267   4                                              {
+ 268   5                                                      set_buf_temp--;
+ 269   5                                                      if(set_buf_temp<0)
+ 270   5                                                      {
+ 271   6                                                              set_buf_temp=0;
+ 272   6                                                      }
+ 273   5                                                      set_mode[6]=du[set_buf_temp/10];
+ 274   5                                                      set_mode[7]=du[set_buf_temp%10];
+ 275   5                                              }
+ 276   4                                              if(canshu_mode==2)
+ 277   4                                              {
+ 278   5                                                      set_buf_led--;
+ 279   5                                                      if(set_buf_led<4)
+ 280   5                                                      {
+ 281   6                                                              set_buf_led=4;
+ 282   6                                                      }
+ 283   5                                                      set_mode[7]=du[set_buf_led];
+ 284   5                                              }
+ 285   4                                              
+ 286   4                                      }
+ 287   3                                      key_val=0;
+ 288   3                                      break;
+ 289   3                              case 9:                 //加
+ 290   3                                      if(mode==1)
+ 291   3                                      {
+ 292   4                                              if(canshu_mode==0)
+ 293   4                                              {
+ 294   5                                                      set_buf_time++;
+ 295   5                                                      if(set_buf_time>23)
+ 296   5                                                      {
+ 297   6                                                              set_buf_time=23;
+ 298   6                                                      }
+ 299   5                                                      set_mode[6]=du[set_buf_time/10];
+ 300   5                                                      set_mode[7]=du[set_buf_time%10];
+ 301   5                                              }
+ 302   4                                              if(canshu_mode==1)
+C51 COMPILER V9.60.0.0   MAIN                                                              04/11/2021 11:34:11 PAGE 6   
+
+ 303   4                                              {
+ 304   5                                                      set_buf_temp++;
+ 305   5                                                      if(set_temp>99)
+ 306   5                                                      {
+ 307   6                                                              set_buf_temp=99;
+ 308   6                                                      }
+ 309   5                                                      set_mode[6]=du[set_buf_temp/10];
+ 310   5                                                      set_mode[7]=du[set_buf_temp%10];
+ 311   5                                              }
+ 312   4                                              if(canshu_mode==2)
+ 313   4                                              {
+ 314   5                                                      set_buf_led++;
+ 315   5                                                      if(set_buf_led>8)
+ 316   5                                                      {
+ 317   6                                                              set_buf_led=8;
+ 318   6                                                      }
+ 319   5                                                      set_mode[7]=du[set_buf_led];
+ 320   5                                              }
+ 321   4                                              
+ 322   4                                      }
+ 323   3                                      key_val=0;
+ 324   3                                      break;
+ 325   3                              default:
+ 326   3                              break;
+ 327   3                      }
+ 328   2                      
+ 329   2                      /*刷新模式时间初值*/
+ 330   2                      if(canshu_mode==0 && mode==1)
+ 331   2                      {
+ 332   3                              set_mode[1]=du[1];
+ 333   3                              set_mode[6]=du[set_buf_time/10];
+ 334   3                              set_mode[7]=du[set_buf_time%10];
+ 335   3                      }
+ 336   2                      
+ 337   2                      /*判断小时参数*/
+ 338   2                      test=(shi/16)*10+(shi%16);      //当前时间
+ 339   2                      if(set_time>8)
+ 340   2                      {
+ 341   3                              if(test>=set_time || test<8)
+ 342   3                              {
+ 343   4                                      led_on(1);
+ 344   4                              }
+ 345   3                              else
+ 346   3                              {
+ 347   4                                      led_off(1);
+ 348   4                              }
+ 349   3                      }
+ 350   2                      if(set_time<8)
+ 351   2                      {
+ 352   3                              if(test>=set_time && test<8)
+ 353   3                              {
+ 354   4                                      led_on(1);
+ 355   4                              }
+ 356   3                              else
+ 357   3                              {
+ 358   4                                      led_off(1);
+ 359   4                              }
+ 360   3                      }
+ 361   2                      
+ 362   2                      /*判断温度参数*/
+ 363   2                      if(temp/10 < set_temp)
+ 364   2                      {
+C51 COMPILER V9.60.0.0   MAIN                                                              04/11/2021 11:34:11 PAGE 7   
+
+ 365   3                              led_on(2);
+ 366   3                      }
+ 367   2                      else
+ 368   2                      {
+ 369   3                              led_off(2);
+ 370   3                      }
+ 371   2                      
+ 372   2                      EA=0;           //防止LED闪烁
+ 373   2                      /*判断LED*/
+ 374   2                      if(set_led==4) led_on(4); else led_off(4);
+ 375   2                      if(set_led==5) led_on(5); else led_off(5);
+ 376   2                      if(set_led==6) led_on(6); else led_off(6);
+ 377   2                      if(set_led==7) led_on(7); else led_off(7);
+ 378   2                      if(set_led==8) led_on(8); else led_off(8);
+ 379   2                      
+ 380   2                      /*判断暗亮状态*/
+ 381   2                      if(adc_01==1)
+ 382   2                      {
+ 383   3                              if(led_count1==3000 && led_count0==0)
+ 384   3                              {
+ 385   4                                      led_on(3);
+ 386   4                              }
+ 387   3                              else
+ 388   3                              {
+ 389   4                                      led_off(3);
+ 390   4                              }
+ 391   3                              
+ 392   3                      }
+ 393   2                      else
+ 394   2                      {
+ 395   3                              if(led_count0==3000 && led_count1==0)
+ 396   3                              {
+ 397   4                                      led_off(3);
+ 398   4                              }
+ 399   3                              else
+ 400   3                              {
+ 401   4                                      led_on(3);
+ 402   4                              }
+ 403   3                      }
+ 404   2                      EA=1;
+ 405   2              }
+ 406   1      }
+ 407          
+ 408          void time0() interrupt 1
+ 409          {
+ 410   1              static unsigned int smg_count=0,key_count=0,i=0,adc_count=0;
+ 411   1              smg_count++;key_count++;adc_count++;
+ 412   1              if(key_count==10)
+ 413   1              {
+ 414   2                      key_val=Key_Scan();
+ 415   2                      key_count=0;
+ 416   2              }
+ 417   1              
+ 418   1              if(adc_count==300)
+ 419   1              {
+ 420   2                      adc_count=0;
+ 421   2                      adc_flag=1;
+ 422   2              }
+ 423   1              
+ 424   1              if(smg_count==2)
+ 425   1              {
+ 426   2                      smg_count=0;
+C51 COMPILER V9.60.0.0   MAIN                                                              04/11/2021 11:34:11 PAGE 8   
+
+ 427   2                      P2=(P2&0x1f)|0xc0;P0=0x00;P2&=0x1f;
+ 428   2                      if(mode==0)             //数据界面
+ 429   2                      {
+ 430   3                              if(shuju_mode==0)
+ 431   3                              {
+ 432   4                                      P2=(P2&0x1f)|0xe0;P0=~smg_time[i];P2&=0x1f;
+ 433   4                              }
+ 434   3                              if(shuju_mode==1)
+ 435   3                              {
+ 436   4                                      P2=(P2&0x1f)|0xe0;P0=~smg_temp[i];P2&=0x1f;
+ 437   4                              }
+ 438   3                              if(shuju_mode==2)
+ 439   3                              {
+ 440   4                                      P2=(P2&0x1f)|0xe0;P0=~smg_adc[i];P2&=0x1f;
+ 441   4                              }
+ 442   3                      }
+ 443   2                      else                    //参数界面
+ 444   2                      {
+ 445   3                              P2=(P2&0x1f)|0xe0;P0=~set_mode[i];P2&=0x1f;
+ 446   3                      }
+ 447   2                      P2=(P2&0x1f)|0xc0;P0=wei[i];P2&=0x1f;P0=0xff;
+ 448   2                      i++;
+ 449   2                      if(i==8) i=0;
+ 450   2              }
+ 451   1              
+ 452   1              if(adc_01==1)
+ 453   1              {
+ 454   2                      led_count1++;
+ 455   2                      if(led_count1>3000)     led_count1=3000;
+ 456   2              }else led_count1=0;
+ 457   1              
+ 458   1              if(adc_01==0)
+ 459   1              {
+ 460   2                      led_count0++;
+ 461   2                      if(led_count0>3000)     led_count0=3000;
+ 462   2              }else led_count0=0;
+ 463   1      }
+ 464          
+ 465          
+ 466          
+ 467          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   2211    ----
+   CONSTANT SIZE    =     18    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     63       4
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      4    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

@@ -1,0 +1,321 @@
+C51 COMPILER V9.60.0.0   MAIN                                                              04/17/2021 19:30:52 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE INCDIR(.\driver) DEBUG OBJECTEXTEND PRIN
+                    -T(.\Listings\main.lst) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include <stc15f2k60s2.h>
+   2          #include "onewire.h"
+   3          #include "iic.h"
+   4          #define u8 unsigned char
+   5          #define u16 unsigned int
+   6                  
+   7          u8 code du[]={0x3F,0x06,0x5B,0x4F,0x66,0x6D,0x7D,0x07,0x7F,0x6F};
+   8          u8 code wei[]={0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80};
+   9          
+  10          sbit relay=P0^4;
+  11          sbit buzzer=P0^6;
+  12          void SysInit()
+  13          {
+  14   1              P2=(P2&0x1f)|0x80;P0=0xff;P2&=0x1f;
+  15   1              P2=(P2&0x1f)|0xa0;relay=0;buzzer=0;P2&=0x1f;
+  16   1              P2=(P2&0x1f)|0xc0;P0=0x00;P2&=0x1f;
+  17   1              P2=(P2&0x1f)|0xe0;P0=0xff;P2&=0x1f;
+  18   1      }
+  19          
+  20          
+  21          void Timer0Init(void)           //1毫秒@11.0592MHz
+  22          {
+  23   1              AUXR |= 0x80;           //定时器时钟1T模式
+  24   1              TMOD |= 0x04;           //设置定时器模式
+  25   1              TL0 = 0xff;             //设置定时初值
+  26   1              TH0 = 0xff;             //设置定时初值
+  27   1              TR0 = 1;                //定时器0开始计时
+  28   1              ET0=1;
+  29   1      }
+  30          
+  31          void Timer1Init(void)           //1毫秒@11.0592MHz
+  32          {
+  33   1              AUXR |= 0x40;           //定时器时钟1T模式
+  34   1              TMOD &= 0x0F;           //设置定时器模式
+  35   1              TL1 = 0xCD;             //设置定时初值
+  36   1              TH1 = 0xD4;             //设置定时初值
+  37   1              TF1 = 0;                //清除TF1标志
+  38   1              TR1 = 1;                //定时器1开始计时
+  39   1              ET1=1;
+  40   1              EA=1;
+  41   1      }
+  42          
+  43          
+  44          void Delay5ms()         //@11.0592MHz
+  45          {
+  46   1              unsigned char i, j;
+  47   1      
+  48   1              i = 54;
+  49   1              j = 199;
+  50   1              do
+  51   1              {
+  52   2                      while (--j);
+  53   2              } while (--i);
+  54   1      }
+C51 COMPILER V9.60.0.0   MAIN                                                              04/17/2021 19:30:52 PAGE 2   
+
+  55          
+  56          
+  57          
+  58          /*独立按键三行*/
+  59          unsigned char Trg;
+  60          unsigned char Cont;
+  61          #define KEYPORT P3
+  62          void Key_Read( void )
+  63          {
+  64   1          unsigned char ReadData = KEYPORT^0xff; 
+  65   1          Trg = ReadData & (ReadData ^ Cont);      
+  66   1          Cont = ReadData;                                    
+  67   1      }
+  68          bit key_flag=0;
+  69          
+  70          u16 temp;
+  71          u8 smg_temp[8]={0x39};
+  72          
+  73          u16 adc;
+  74          u8 adc_buf;
+  75          bit adc_flag=0;
+  76          u8 smg_adc[8]={0x3e};
+  77          
+  78          u16 count=0;
+  79          u8 smg_n55[8]={0x71};
+  80          
+  81          u8 mode=1;
+  82          
+  83          u8 freq_low=0,freq_high=0;
+  84          u16 save_freq=0;
+  85          
+  86          u8 temp_low=0,temp_high=0;
+  87          u16 save_temp=0;
+  88          
+  89          u16 save_adc=0;
+  90          
+  91          u8 hx_mode=0;
+  92          
+  93          u8 hx_temp[8]={0x76,0x39};
+  94          u8 hx_adc[8]={0x76,0x3e};
+  95          u8 hx_n55[8]={0x76,0x71};
+  96          
+  97          u8 set_adc[8]={0x73};
+  98          u8 S7_mode=0;
+  99          
+ 100          u8 set_adcval=1;
+ 101          
+ 102          void KeyProc(void) 
+ 103          {
+ 104   1              if(Trg==0x01)           //S7
+ 105   1              {
+ 106   2                      mode=0;hx_mode=0;
+ 107   2                      S7_mode++;
+ 108   2                      if(S7_mode==2)
+ 109   2                      {
+ 110   3                              S7_mode=0;
+ 111   3                              mode=1;
+ 112   3                      }
+ 113   2              }
+ 114   1              if(Trg==0x02)           //S6
+ 115   1              {
+ 116   2                      if(S7_mode==0)
+C51 COMPILER V9.60.0.0   MAIN                                                              04/17/2021 19:30:52 PAGE 3   
+
+ 117   2                      {
+ 118   3                              mode=0;
+ 119   3                              hx_mode++;
+ 120   3                              if(hx_mode==4)  hx_mode=1;
+ 121   3                      }
+ 122   2                      if(S7_mode==1)
+ 123   2                      {
+ 124   3                              set_adcval++;
+ 125   3                              if(set_adcval>50)       set_adcval=1;
+ 126   3                      }
+ 127   2      
+ 128   2              }
+ 129   1              if(Trg==0x04)           //S5
+ 130   1              {
+ 131   2                      write_24c02(0x01,temp_high);Delay5ms();
+ 132   2                      write_24c02(0x02,temp_low);Delay5ms();
+ 133   2                      save_temp = (temp_high<<8)|temp_low;
+ 134   2                      
+ 135   2                      write_24c02(0x03,adc_buf);Delay5ms();
+ 136   2                      save_adc=adc_buf/255.0f*500;
+ 137   2                      
+ 138   2                      write_24c02(0x04,freq_high);Delay5ms();
+ 139   2                      write_24c02(0x05,freq_low);
+ 140   2                      save_freq = freq_low|(freq_high<<8);
+ 141   2              }
+ 142   1              if(Trg==0x08)           //S4
+ 143   1              {
+ 144   2                      mode++;
+ 145   2                      if(mode==4)     mode=1;
+ 146   2              }
+ 147   1              
+ 148   1      }
+ 149          
+ 150          void main()
+ 151          {
+ 152   1              SysInit();
+ 153   1              Timer0Init();
+ 154   1              Timer1Init();
+ 155   1              
+ 156   1              temp_high=read_24c02(0x01);Delay5ms();
+ 157   1              temp_low=read_24c02(0x02);Delay5ms();
+ 158   1              save_temp = (temp_high<<8)|temp_low;
+ 159   1              
+ 160   1              freq_high=read_24c02(0x04);Delay5ms();
+ 161   1              freq_low=read_24c02(0x05);Delay5ms();
+ 162   1              save_freq = (freq_high<<8)|freq_low;
+ 163   1              
+ 164   1              save_adc=read_24c02(0x03)/255.0f*500;
+ 165   1              
+ 166   1              while(1)
+ 167   1              {
+ 168   2                      if(adc_flag)
+ 169   2                      {
+ 170   3                              adc_buf=read_adc(0x03);
+ 171   3                              adc=adc_buf/255.0f*500;
+ 172   3                              smg_adc[6]=du[adc/100]|0x80;smg_adc[7]=du[adc/10%10];
+ 173   3                              
+ 174   3                              temp=(u16)rd_temperature_f();
+ 175   3                              smg_temp[4]=du[temp/1000];smg_temp[5]=du[temp/100%10]|0x80;
+ 176   3                              smg_temp[6]=du[temp/10%10];smg_temp[7]=du[temp%10];
+ 177   3                              temp_low=temp;
+ 178   3                              temp_high=temp>>8;
+C51 COMPILER V9.60.0.0   MAIN                                                              04/17/2021 19:30:52 PAGE 4   
+
+ 179   3                      }
+ 180   2                      
+ 181   2                      if(key_flag)
+ 182   2                      {
+ 183   3                              key_flag=0;
+ 184   3                              Key_Read();
+ 185   3                              KeyProc();
+ 186   3                      }
+ 187   2                      
+ 188   2                      if(hx_mode==1)
+ 189   2                      {
+ 190   3                              hx_temp[4]=du[save_temp/1000];hx_temp[5]=du[save_temp/100%10]|0x80;
+ 191   3                              hx_temp[6]=du[save_temp/10%10];hx_temp[7]=du[save_temp%10];
+ 192   3                      }
+ 193   2                      
+ 194   2                      if(hx_mode==2)
+ 195   2                      {
+ 196   3                              hx_adc[6]=du[save_adc/100]|0x80;hx_adc[7]=du[save_adc/10%10];
+ 197   3                      }
+ 198   2                      
+ 199   2                      if(hx_mode==3)
+ 200   2                      {
+ 201   3                              hx_n55[3]=du[save_freq/10000];
+ 202   3                              hx_n55[4]=du[save_freq/1000%10];
+ 203   3                              hx_n55[5]=du[save_freq/100%10];
+ 204   3                              hx_n55[6]=du[save_freq/10%10];
+ 205   3                              hx_n55[7]=du[save_freq%10];
+ 206   3                      }
+ 207   2                      
+ 208   2                      if(S7_mode==1)
+ 209   2                      {
+ 210   3                              set_adc[6]=du[set_adcval/10]|0x80;set_adc[7]=du[set_adcval%10];
+ 211   3                      }
+ 212   2              }
+ 213   1      }
+ 214          
+ 215          void time0() interrupt 1
+ 216          {
+ 217   1              count++;
+ 218   1      }
+ 219          
+ 220          void time1() interrupt 3
+ 221          {
+ 222   1              static int smg_count=0,key_count=0,i=0,adc_count=0,one_second_count=0;
+ 223   1              smg_count++;key_count++;adc_count++;one_second_count++;
+ 224   1              
+ 225   1              if(adc_count==150)
+ 226   1              {
+ 227   2                      adc_count=0;
+ 228   2                      adc_flag=1;
+ 229   2              }
+ 230   1              
+ 231   1              if(key_count==10)
+ 232   1              {
+ 233   2                      key_flag=1;
+ 234   2                      key_count=0;
+ 235   2              }
+ 236   1              
+ 237   1              if(smg_count==2)
+ 238   1              {
+ 239   2                      smg_count=0;
+ 240   2                      P2=(P2&0x1f)|0xc0;P0=0x00;P2&=0x1f;
+C51 COMPILER V9.60.0.0   MAIN                                                              04/17/2021 19:30:52 PAGE 5   
+
+ 241   2                      if(mode==1)
+ 242   2                      {
+ 243   3                              P2=(P2&0x1f)|0xe0;P0=~smg_temp[i];P2&=0x1f;
+ 244   3                      }
+ 245   2                      if(mode==2)
+ 246   2                      {
+ 247   3                              P2=(P2&0x1f)|0xe0;P0=~smg_adc[i];P2&=0x1f;
+ 248   3                      }
+ 249   2                      if(mode==3)
+ 250   2                      {
+ 251   3                              P2=(P2&0x1f)|0xe0;P0=~smg_n55[i];P2&=0x1f;
+ 252   3                      }
+ 253   2                      
+ 254   2                      if(hx_mode==1)
+ 255   2                      {
+ 256   3                              P2=(P2&0x1f)|0xe0;P0=~hx_temp[i];P2&=0x1f;
+ 257   3                      }
+ 258   2                      if(hx_mode==2)
+ 259   2                      {
+ 260   3                              P2=(P2&0x1f)|0xe0;P0=~hx_adc[i];P2&=0x1f;
+ 261   3                      }
+ 262   2                      if(hx_mode==3)
+ 263   2                      {
+ 264   3                              P2=(P2&0x1f)|0xe0;P0=~hx_n55[i];P2&=0x1f;
+ 265   3                      }
+ 266   2                      if(S7_mode==1)
+ 267   2                      {
+ 268   3                              P2=(P2&0x1f)|0xe0;P0=~set_adc[i];P2&=0x1f;
+ 269   3                      }
+ 270   2                      P2=(P2&0x1f)|0xc0;P0=wei[i];P2&=0x1f;
+ 271   2                      i++;
+ 272   2                      if(i==8)  i=0;
+ 273   2              }
+ 274   1              
+ 275   1              if(one_second_count==1000)
+ 276   1              {
+ 277   2                      one_second_count=0;
+ 278   2                      ET0=0;TR0=0;
+ 279   2                      freq_low=count;
+ 280   2                      freq_high=count>>8;
+ 281   2                      smg_n55[3]=du[count/10000];
+ 282   2                      smg_n55[4]=du[count/1000%10];
+ 283   2                      smg_n55[5]=du[count/100%10];
+ 284   2                      smg_n55[6]=du[count/10%10];
+ 285   2                      smg_n55[7]=du[count%10];
+ 286   2                      count=0;
+ 287   2                      ET0=1;TR0=1;
+ 288   2              }
+ 289   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1599    ----
+   CONSTANT SIZE    =     18    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     89    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      2    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

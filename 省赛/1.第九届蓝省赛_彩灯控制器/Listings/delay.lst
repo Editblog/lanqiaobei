@@ -1,0 +1,62 @@
+C51 COMPILER V9.60.0.0   DELAY                                                             04/07/2021 17:52:50 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE DELAY
+OBJECT MODULE PLACED IN .\Objects\delay.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE driver\delay.c OPTIMIZE(8,SPEED) BROWSE INCDIR(.\driver) DEBUG OBJECTEXT
+                    -END PRINT(.\Listings\delay.lst) OBJECT(.\Objects\delay.obj)
+
+line level    source
+
+   1          #include "delay.h"
+   2          #include "intrins.h"
+*** ERROR C127 IN LINE 19 OF C:\Keil_v5\C51\Inc\intrins.h: '__nop_': invalid storage class
+*** ERROR C127 IN LINE 20 OF C:\Keil_v5\C51\Inc\intrins.h: '__testbit_': invalid storage class
+*** ERROR C127 IN LINE 21 OF C:\Keil_v5\C51\Inc\intrins.h: '__cror_': invalid storage class
+*** ERROR C127 IN LINE 22 OF C:\Keil_v5\C51\Inc\intrins.h: '__iror_': invalid storage class
+*** ERROR C127 IN LINE 23 OF C:\Keil_v5\C51\Inc\intrins.h: '__lror_': invalid storage class
+*** ERROR C127 IN LINE 24 OF C:\Keil_v5\C51\Inc\intrins.h: '__crol_': invalid storage class
+*** ERROR C127 IN LINE 25 OF C:\Keil_v5\C51\Inc\intrins.h: '__irol_': invalid storage class
+*** ERROR C127 IN LINE 26 OF C:\Keil_v5\C51\Inc\intrins.h: '__lrol_': invalid storage class
+*** ERROR C127 IN LINE 27 OF C:\Keil_v5\C51\Inc\intrins.h: '__chkfloat_': invalid storage class
+*** ERROR C127 IN LINE 33 OF C:\Keil_v5\C51\Inc\intrins.h: '__push_': invalid storage class
+*** ERROR C127 IN LINE 34 OF C:\Keil_v5\C51\Inc\intrins.h: '__pop_': invalid storage class
+   3          void delay_us(unsigned int i)           //@11.0592MHz
+   4          {
+*** ERROR C132 IN LINE 4 OF driver\delay.c: '_delay_us': not in formal parameter list
+*** ERROR C141 IN LINE 4 OF driver\delay.c: syntax error near '{', expected ';'
+   5                  do
+   6                  {
+   7                          _nop_();
+*** ERROR C132 IN LINE 7 OF driver\delay.c: '__nop_': not in formal parameter list
+   8                          _nop_();
+*** ERROR C132 IN LINE 8 OF driver\delay.c: '__nop_': not in formal parameter list
+   9                          _nop_();
+*** ERROR C132 IN LINE 9 OF driver\delay.c: '__nop_': not in formal parameter list
+  10                  }while(i--);
+*** ERROR C141 IN LINE 10 OF driver\delay.c: syntax error near '}', expected 'hdata'
+*** ERROR C141 IN LINE 10 OF driver\delay.c: syntax error near '--', expected ')'
+  11                  
+  12          }
+  13          
+  14          void delay_ms(unsigned int n)           //@11.0592MHz
+  15          {
+  16   1              unsigned char i, j;
+  17   1              do
+  18   1              {
+  19   2                      _nop_();
+  20   2                      _nop_();
+  21   2                      _nop_();
+  22   2                      i = 11;
+  23   2                      j = 190;
+  24   2                      do
+  25   2                      {
+  26   3                              while (--j);
+  27   3                      } while (--i);  
+  28   2              }while(n--);
+  29   1      }
+  30          
+  31          
+  32          
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  18 ERROR(S)

@@ -1,0 +1,5 @@
+".\Objects\main.obj",
+".\Objects\ds1302.obj",
+".\Objects\iic.obj" 
+TO ".\Objects\模拟智能灌溉系统" 
+PRINT(".\Listings\模拟智能灌溉系统.m51") RAMSIZE(256) 

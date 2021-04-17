@@ -1,0 +1,340 @@
+C51 COMPILER V9.60.0.0   MAIN                                                              04/11/2021 21:45:02 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE INCDIR(.\driver) DEBUG OBJECTEXTEND PRIN
+                    -T(.\Listings\main.lst) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include <stc15f2k60s2.h>
+   2          #include "ds1302.h"
+   3          #include "onewire.h"
+   4          #define u8 unsigned char
+   5          #define u16 unsigned int
+   6                  
+   7          u8 code du[]={0x3F,0x06,0x5B,0x4F,0x66,0x6D,0x7D,0x07,0x7F,0x6F};
+   8          u8 code wei[]={0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80};
+   9          
+  10          void All_Init(void)
+  11          {
+  12   1              //LED
+  13   1          P2 &= 0X1F;   //¹Ø573
+  14   1              P0 =  0XFF;   //Ô¤ËÍÊý¾Ý
+  15   1              P2 |= 0X80;   //¿ªÏàÓ¦573
+  16   1              P0 =  0XFF;   //ËÍÊý¾Ý
+  17   1              P2 &= 0X1F;   //¹Ø573
+  18   1              
+  19   1              //·äÃùÆ÷
+  20   1          P2 &= 0X1F;   //¹Ø573
+  21   1              P0 =  0X00;   //Ô¤ËÍÊý¾Ý
+  22   1              P2 |= 0XA0;   //¿ªÏàÓ¦573
+  23   1              P0 =  0X00;   //ËÍÊý¾Ý
+  24   1              P2 &= 0X1F;   //¹Ø573
+  25   1              
+  26   1              //ÊýÂë¹ÜÎ»Ñ¡
+  27   1              P2 &= 0X1F;   //¹Ø573
+  28   1              P0 =  0X00;   //Ô¤ËÍÊý¾Ý
+  29   1              P2 |= 0XC0;   //¿ªÏàÓ¦573
+  30   1              P0 =  0X00;   //ËÍÊý¾Ý
+  31   1              P2 &= 0X1F;   //¹Ø573
+  32   1              
+  33   1              //ÊýÂë¹Ü¶ÎÑ¡
+  34   1              P2 &= 0X1F;   //¹Ø573
+  35   1              P0 =  0XFF;   //Ô¤ËÍÊý¾Ý
+  36   1              P2 |= 0XE0;   //¿ªÏàÓ¦573
+  37   1              P0 =  0XFF;   //ËÍÊý¾Ý
+  38   1              P2 &= 0X1F;   //¹Ø573
+  39   1      }
+  40          
+  41          void Timer0Init(void)           //1ºÁÃë@11.0592MHz
+  42          {
+  43   1              AUXR |= 0x80;           //¶¨Ê±Æ÷Ê±ÖÓ1TÄ£Ê½
+  44   1              TMOD &= 0xF0;           //ÉèÖÃ¶¨Ê±Æ÷Ä£Ê½
+  45   1              TL0 = 0xCD;             //ÉèÖÃ¶¨Ê±³õÖµ
+  46   1              TH0 = 0xD4;             //ÉèÖÃ¶¨Ê±³õÖµ
+  47   1              TF0 = 0;                //Çå³ýTF0±êÖ¾
+  48   1              TR0 = 1;                //¶¨Ê±Æ÷0¿ªÊ¼¼ÆÊ±
+  49   1              ET0=1;
+  50   1              EA=1;
+  51   1      }
+  52          
+  53          //---------------------------ËÄ¸ö¶ÀÁ¢°´¼ü--------------------------------
+  54          #define btn_io P3
+C51 COMPILER V9.60.0.0   MAIN                                                              04/11/2021 21:45:02 PAGE 2   
+
+  55          #define btn_state_0 0     //ÊÇ·ñ°´ÏÂ
+  56          #define btn_state_1 1    //ÊÇ·ñÊÇ¶¶¶¯
+  57          #define btn_state_2 2     //ÅÐ¶¨°´¼üÓÐÐ§µÄÖÖÀà
+  58          #define btn_state_3 3     //µÈ´ý°´¼üÊÍ·Å 
+  59          #define btn_mask 0x0f     //ÆÁ±Î²»ÐèÒªµÄIO
+  60          #define LONG_KEY_TIME 100 //LONG_KEY_TIME*10MS = 3S
+  61          #define SINGLE_KEY_TIME 3 //SINGLE_KEY_TIME*10MS = 30MS
+  62          char btnkey;
+  63          static char btn_state = 0;
+  64          char scanbtn(void)
+  65          {
+  66   1              static int key_time; //°´¼ü¼ÆÊ±±äÁ¿     
+  67   1              static char key_value=0;
+  68   1              char btn_press,btn_return = 0;
+  69   1              btn_press = btn_io & btn_mask;
+  70   1              switch(btn_state)
+  71   1              {
+  72   2                      case btn_state_0:
+  73   2                              key_value=0;
+  74   2                              if(btn_press != btn_mask){
+  75   3                                      key_time = 0; // ÇåÁãÊ±¼ä¼ä¸ô¼ÆÊý
+  76   3                                      btn_state = btn_state_1;
+  77   3                              }
+  78   2                              break;
+  79   2                      case btn_state_1:
+  80   2                              if(btn_press != btn_mask)
+  81   2                              {
+  82   3                                      key_time++; // Ò»´Î10ms
+  83   3                                      if (key_time >= SINGLE_KEY_TIME) // Ïû¶¶Ê±¼äÎª£ºSINGLE_KEY_TIME*10ms = 30ms;
+  84   3                                      {
+  85   4                                              btn_state = btn_state_2;
+  86   4                                      }
+  87   3                              }
+  88   2                              else
+  89   2                                      btn_state = btn_state_0;
+  90   2                              break;
+  91   2                      case btn_state_2:
+  92   2                              if(btn_press == btn_mask)
+  93   2                              {
+  94   3                                      btn_return=key_value;
+  95   3                                      key_value=0;
+  96   3                                      btn_state = btn_state_0; // È¥×´Ì¬3£¬µÈ´ý°´¼üÊÍ·Å
+  97   3                              }
+  98   2                              else
+  99   2                              {
+ 100   3                                      if(btn_press == 0x0e) key_value = 1;
+ 101   3                                      if(btn_press == 0x0d) key_value = 2;
+ 102   3                                      if(btn_press == 0x0b) key_value = 3;
+ 103   3                                      if(btn_press == 0x07) key_value = 4;
+ 104   3      
+ 105   3                                      key_time++;
+ 106   3      
+ 107   3                                      if (key_time >= LONG_KEY_TIME) // Èç¹û°´¼üÊ±¼ä³¬¹ý Éè¶¨µÄ³¤°´Ê±¼ä£¨LONG_KEY_TIME*10ms=200*10ms=2000ms£
+             -©, ÔòÅÐ¶¨Îª ³¤°´
+ 108   3                                      {
+ 109   4                                              btn_return =key_value|0x80;
+ 110   4                                              key_value=0;
+ 111   4                                              btn_state = btn_state_3; // È¥×´Ì¬3£¬µÈ´ý°´¼üÊÍ·Å
+ 112   4                                      }
+ 113   3                              }
+ 114   2                              break;
+ 115   2                      case btn_state_3:
+C51 COMPILER V9.60.0.0   MAIN                                                              04/11/2021 21:45:02 PAGE 3   
+
+ 116   2                              if(btn_press == 0x0f)   btn_state = btn_state_0;
+ 117   2                              break;
+ 118   2                      default:
+ 119   2                      break;
+ 120   2              }
+ 121   1              return  btn_return;
+ 122   1      }
+ 123          
+ 124          u8 shi,fen,miao;
+ 125          bit blink_flag=0;
+ 126          bit temp_flag=0;
+ 127          bit led_blink_flag=0;
+ 128          
+ 129          u8 temperature[10];
+ 130          u8 sample_count=0;
+ 131          
+ 132          u8 menu1[8],menu2[8],menu3[8];
+ 133          u8 sample_time[4]={1,5,30,60};
+ 134          u8 sample_index;
+ 135          u8 real_sample_time;
+ 136          
+ 137          u8 menu_index=0;        //Ä¬ÈÏ½çÃæ 
+ 138          u8 display_count=0;
+ 139          u8 n;
+ 140          
+ 141          void main()
+ 142          {
+ 143   1              All_Init();
+ 144   1              set_srf(23,59,50);
+ 145   1              for(n=0;n<10;n++)       rd_temperature_f();
+ 146   1              rd_temperature_f();
+ 147   1              Timer0Init();
+ 148   1              while(1)
+ 149   1              {
+ 150   2                      EA=0;
+ 151   2                      miao=Read_Ds1302_Byte(0x81);
+ 152   2                      fen=Read_Ds1302_Byte(0x83);
+ 153   2                      shi=Read_Ds1302_Byte(0x85);
+ 154   2                      EA=1;
+ 155   2                      
+ 156   2                      menu2[0]=du[shi/16];menu2[1]=du[shi%16];
+ 157   2                      menu2[3]=du[fen/16];menu2[4]=du[fen%16];
+ 158   2                      menu2[6]=du[miao/16];menu2[7]=du[miao%16];
+ 159   2                      
+ 160   2                      //²É¼¯Ê±¼ä¼ä¸ôÏÔÊ¾
+ 161   2                      menu1[6]=du[sample_time[sample_index]/10];menu1[7]=du[sample_time[sample_index]%10];menu1[5]=0x40;
+ 162   2                      switch(btnkey)
+ 163   2                      {
+ 164   3                              case 1:                         //S7
+ 165   3                                      if(menu_index==2)
+ 166   3                                      {
+ 167   4                                              menu_index=0;
+ 168   4                                              sample_count=0;
+ 169   4                                              display_count=0;
+ 170   4                                      }
+ 171   3                                      btnkey=0;
+ 172   3                                      break;
+ 173   3                              case 2:                         //S6
+ 174   3                                      if(menu_index==2)
+ 175   3                                      {
+ 176   4                                              led_blink_flag=0;
+ 177   4                                              display_count++;
+C51 COMPILER V9.60.0.0   MAIN                                                              04/11/2021 21:45:02 PAGE 4   
+
+ 178   4                                              if(display_count==10)
+ 179   4                                              {
+ 180   5                                                      display_count=0;
+ 181   5                                              }
+ 182   4                                              P2=(P2&0x1f)|0x80;P0=0xff;P2&=0x1f;
+ 183   4                                      }
+ 184   3                                      btnkey=0;
+ 185   3                                      break;
+ 186   3                              case 3:                         //S5
+ 187   3                                      if(menu_index==0)
+ 188   3                                      {
+ 189   4                                              menu_index=1;
+ 190   4                                              real_sample_time=sample_time[sample_index];
+ 191   4                                      }
+ 192   3                                      btnkey=0;
+ 193   3                                      break;
+ 194   3                              case 4:                         //S4 ²É¼¯Ê±¼ä¼ä¸ôÇÐ»»
+ 195   3                                      if(menu_index==0)
+ 196   3                                      {
+ 197   4                                              sample_index++;
+ 198   4                                              if(sample_index==4)     sample_index=0;
+ 199   4                                      }
+ 200   3                                      btnkey=0;
+ 201   3                                      break;
+ 202   3                              default:
+ 203   3                              break;
+ 204   3                      }
+ 205   2                      
+ 206   2                      if(temp_flag)
+ 207   2                      {
+ 208   3                              temp_flag=0;
+ 209   3                              if(sample_count<10)
+ 210   3                              {
+ 211   4                                      //EA=0;
+ 212   4                                      temperature[sample_count]=rd_temperature_f();
+ 213   4                                      //EA=1;
+ 214   4                                      sample_count++;
+ 215   4                              }
+ 216   3                              else
+ 217   3                              {
+ 218   4                                      menu_index=2;
+ 219   4                                      led_blink_flag=1;
+ 220   4                              }
+ 221   3                      }
+ 222   2                      
+ 223   2                      if(menu_index==2)
+ 224   2                      {
+ 225   3                              menu3[0]=0x40;
+ 226   3                              menu3[1]=du[display_count/10];
+ 227   3                              menu3[2]=du[display_count%10];
+ 228   3                              menu3[3]=0x00;menu3[4]=0x00;menu3[5]=0x40;
+ 229   3                              menu3[6]=du[temperature[display_count]/10];
+ 230   3                              menu3[7]=du[temperature[display_count]%10];
+ 231   3                              
+ 232   3                      }
+ 233   2                      
+ 234   2              }
+ 235   1      }
+ 236          
+ 237          void time0() interrupt 1
+ 238          {
+ 239   1              static int smg_count=0,key_count=0,i=0,blink_count=0,sample_count=0;
+C51 COMPILER V9.60.0.0   MAIN                                                              04/11/2021 21:45:02 PAGE 5   
+
+ 240   1              smg_count++; key_count++;blink_count++;
+ 241   1              
+ 242   1              if(blink_count==1000)
+ 243   1              {
+ 244   2                      blink_count=0;
+ 245   2                      blink_flag=~blink_flag;
+ 246   2                      if(blink_flag)
+ 247   2                      {
+ 248   3                              menu2[2]=0x00;menu2[5]=0x00;
+ 249   3                      }
+ 250   2                      else
+ 251   2                      {
+ 252   3                              menu2[2]=0x40;menu2[5]=0x40;
+ 253   3                      }
+ 254   2                      
+ 255   2                      if(led_blink_flag)
+ 256   2                      {
+ 257   3                              if(blink_flag)
+ 258   3                              {
+ 259   4                                      P2=(P2&0x1f)|0x80;P0=~0x01;P2&=0x1f;
+ 260   4                              }
+ 261   3                              else
+ 262   3                              {
+ 263   4                                      P2=(P2&0x1f)|0x80;P0=0xff;P2&=0x1f;
+ 264   4                              }
+ 265   3                      }
+ 266   2                      
+ 267   2              }
+ 268   1      
+ 269   1              if(key_count==10)
+ 270   1              {
+ 271   2                      btnkey=scanbtn();
+ 272   2                      key_count=0;
+ 273   2              }
+ 274   1              
+ 275   1              if(smg_count==2)
+ 276   1              {
+ 277   2                      smg_count=0;
+ 278   2                      P2=(P2&0x1f)|0xc0;P0=0x00;P2&=0x1f;
+ 279   2                      if(menu_index==0)
+ 280   2                      {
+ 281   3                              P2=(P2&0x1f)|0xe0;P0=~menu1[i];P2&=0x1f;
+ 282   3                      }
+ 283   2                      if(menu_index==1)
+ 284   2                      {
+ 285   3                              P2=(P2&0x1f)|0xe0;P0=~menu2[i];P2&=0x1f;
+ 286   3                      }
+ 287   2                      if(menu_index==2)
+ 288   2                      {
+ 289   3                              P2=(P2&0x1f)|0xe0;P0=~menu3[i];P2&=0x1f;
+ 290   3                      }
+ 291   2                      P2=(P2&0x1f)|0xc0;P0=wei[i];P2&=0x1f;P0=0xff;
+ 292   2                      i++;
+ 293   2                      if(i==8) i=0;
+ 294   2              }
+ 295   1              if(menu_index==1)
+ 296   1              {
+ 297   2                      sample_count++;
+ 298   2                      if(sample_count==real_sample_time*1000) //s->ms
+ 299   2                      {
+ 300   3                              sample_count=0;
+ 301   3                              temp_flag=1;
+C51 COMPILER V9.60.0.0   MAIN                                                              04/11/2021 21:45:02 PAGE 6   
+
+ 302   3                      }
+ 303   2              }
+ 304   1              
+ 305   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    961    ----
+   CONSTANT SIZE    =     18    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     62    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      3    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

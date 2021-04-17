@@ -1,0 +1,425 @@
+C51 COMPILER V9.60.0.0   MAIN                                                              04/08/2021 20:53:36 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE INCDIR(.\driver) DEBUG OBJECTEXTEND PRIN
+                    -T(.\Listings\main.lst) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include <stc15f2k60s2.h>
+   2          #include "iic.h"
+   3          #include "led.h"
+   4          #define u8 unsigned char
+   5          #define u16 unsigned int
+   6                  
+   7          u8 code du[]={0x3F,0x06,0x5B,0x4F,0x66,0x6D,0x7D,0x07,0x7F,0x6F};
+   8          u8 code wei[]={0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80};
+   9          
+  10          void All_Init(void)
+  11          {
+  12   1              //LED
+  13   1          P2 &= 0X1F;   //¹Ø573
+  14   1              P0 =  0XFF;   //Ô¤ËÍÊý¾Ý
+  15   1              P2 |= 0X80;   //¿ªÏàÓ¦573
+  16   1              P0 =  0XFF;   //ËÍÊý¾Ý
+  17   1              P2 &= 0X1F;   //¹Ø573
+  18   1              
+  19   1              //·äÃùÆ÷
+  20   1          P2 &= 0X1F;   //¹Ø573
+  21   1              P0 =  0X00;   //Ô¤ËÍÊý¾Ý
+  22   1              P2 |= 0XA0;   //¿ªÏàÓ¦573
+  23   1              P0 =  0X00;   //ËÍÊý¾Ý
+  24   1              P2 &= 0X1F;   //¹Ø573
+  25   1              
+  26   1              //ÊýÂë¹ÜÎ»Ñ¡
+  27   1              P2 &= 0X1F;   //¹Ø573
+  28   1              P0 =  0X00;   //Ô¤ËÍÊý¾Ý
+  29   1              P2 |= 0XC0;   //¿ªÏàÓ¦573
+  30   1              P0 =  0X00;   //ËÍÊý¾Ý
+  31   1              P2 &= 0X1F;   //¹Ø573
+  32   1              
+  33   1              //ÊýÂë¹Ü¶ÎÑ¡
+  34   1              P2 &= 0X1F;   //¹Ø573
+  35   1              P0 =  0XFF;   //Ô¤ËÍÊý¾Ý
+  36   1              P2 |= 0XE0;   //¿ªÏàÓ¦573
+  37   1              P0 =  0XFF;   //ËÍÊý¾Ý
+  38   1              P2 &= 0X1F;   //¹Ø573
+  39   1      }
+  40          
+  41          void Timer0Init(void)           //1ºÁÃë@11.0592MHz
+  42          {
+  43   1              AUXR |= 0x80;           //¶¨Ê±Æ÷Ê±ÖÓ1TÄ£Ê½
+  44   1              TMOD &= 0xF0;           //ÉèÖÃ¶¨Ê±Æ÷Ä£Ê½
+  45   1              TL0 = 0xCD;             //ÉèÖÃ¶¨Ê±³õÖµ
+  46   1              TH0 = 0xD4;             //ÉèÖÃ¶¨Ê±³õÖµ
+  47   1              TF0 = 0;                //Çå³ýTF0±êÖ¾
+  48   1              TR0 = 1;                //¶¨Ê±Æ÷0¿ªÊ¼¼ÆÊ±
+  49   1              ET0=1;
+  50   1              EA=1;
+  51   1      }
+  52          
+  53          //---------------------------ËÄ¸ö¶ÀÁ¢°´¼ü--------------------------------
+  54          #define btn_io P3
+C51 COMPILER V9.60.0.0   MAIN                                                              04/08/2021 20:53:36 PAGE 2   
+
+  55          #define btn_state_0 0     //ÊÇ·ñ°´ÏÂ
+  56          #define btn_state_1 1    //ÊÇ·ñÊÇ¶¶¶¯
+  57          #define btn_state_2 2     //ÅÐ¶¨°´¼üÓÐÐ§µÄÖÖÀà
+  58          #define btn_state_3 3     //µÈ´ý°´¼üÊÍ·Å
+  59          #define btn_mask 0x0f     //ÆÁ±Î²»ÐèÒªµÄIO
+  60          #define LONG_KEY_TIME 100 //LONG_KEY_TIME*10MS = 3S
+  61          #define SINGLE_KEY_TIME 3 //SINGLE_KEY_TIME*10MS = 30MS
+  62          char btnkey;
+  63          static char btn_state = 0;
+  64          char scanbtn(void)
+  65          {
+  66   1              static int key_time; //°´¼ü¼ÆÊ±±äÁ¿     
+  67   1              static char key_value=0;
+  68   1              char btn_press,btn_return = 0;
+  69   1              btn_press = btn_io & btn_mask;
+  70   1              switch(btn_state)
+  71   1              {
+  72   2                      case btn_state_0:
+  73   2                              key_value=0;
+  74   2                              if(btn_press != btn_mask){
+  75   3                                      key_time = 0; // ÇåÁãÊ±¼ä¼ä¸ô¼ÆÊý
+  76   3                                      btn_state = btn_state_1;
+  77   3                              }
+  78   2                              break;
+  79   2                      case btn_state_1:
+  80   2                              if(btn_press != btn_mask)
+  81   2                              {
+  82   3                                      key_time++; // Ò»´Î10ms
+  83   3                                      if (key_time >= SINGLE_KEY_TIME) // Ïû¶¶Ê±¼äÎª£ºSINGLE_KEY_TIME*10ms = 30ms;
+  84   3                                      {
+  85   4                                              btn_state = btn_state_2;
+  86   4                                      }
+  87   3                              }
+  88   2                              else
+  89   2                                      btn_state = btn_state_0;
+  90   2                              break;
+  91   2                      case btn_state_2:
+  92   2                              if(btn_press == btn_mask)
+  93   2                              {
+  94   3                                      btn_return=key_value;
+  95   3                                      key_value=0;
+  96   3                                      btn_state = btn_state_0; // È¥×´Ì¬3£¬µÈ´ý°´¼üÊÍ·Å
+  97   3                              }
+  98   2                              else
+  99   2                              {
+ 100   3                                      if(btn_press == 0x0e) key_value = 1;
+ 101   3                                      if(btn_press == 0x0d) key_value = 2;
+ 102   3                                      if(btn_press == 0x0b) key_value = 3;
+ 103   3                                      if(btn_press == 0x07) key_value = 4;
+ 104   3      
+ 105   3                                      key_time++;
+ 106   3      
+ 107   3                                      if (key_time >= LONG_KEY_TIME) // Èç¹û°´¼üÊ±¼ä³¬¹ý Éè¶¨µÄ³¤°´Ê±¼ä£¨LONG_KEY_TIME*10ms=200*10ms=2000ms£
+             -©, ÔòÅÐ¶¨Îª ³¤°´
+ 108   3                                      {
+ 109   4                                              btn_return =key_value|0x80;
+ 110   4                                              key_value=0;
+ 111   4                                              btn_state = btn_state_3; // È¥×´Ì¬3£¬µÈ´ý°´¼üÊÍ·Å
+ 112   4                                      }
+ 113   3                              }
+ 114   2                              break;
+ 115   2                      case btn_state_3:
+C51 COMPILER V9.60.0.0   MAIN                                                              04/08/2021 20:53:36 PAGE 3   
+
+ 116   2                              if(btn_press == 0x0f)   btn_state = btn_state_0;
+ 117   2                              break;
+ 118   2                      default:
+ 119   2                      break;
+ 120   2              }
+ 121   1              return  btn_return;
+ 122   1      }
+ 123          
+ 124          u8 led_mode=0;
+ 125          u8 led_index=0;
+ 126          bit adc_flag=0;
+ 127          u8 adc_value;
+ 128          u8 led_pwm=0;
+ 129          u8 set_mode=4;  //0ÊÇÏ¨ÃðÄ£Ê½ 1ÊÇÁ÷×ªÄ£Ê½ 2ÊÇÊ±¼ä
+ 130          u8 smg_led_set[8]={0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff};
+ 131          u8 smg_led_pwm[8]={0xff,0xff,0xff,0xff,0xff,0xff,0xbf,0xff};
+ 132          u8 set_led_num=1;       //Á÷×ªÄ£Ê½Êý×Ö 
+ 133          u16 led_interval[5]={0,400,800,1200,800};       //Á÷×ªÊ±¼ä
+ 134          bit smg_blink_flag;
+ 135          void main()
+ 136          {
+ 137   1              led_interval[1]=read_24c02(1)*100;
+ 138   1              led_interval[2]=read_24c02(2)*100;
+ 139   1              led_interval[3]=read_24c02(3)*100;
+ 140   1              led_interval[4]=read_24c02(4)*100;
+ 141   1              Timer0Init();
+ 142   1              All_Init();
+ 143   1              while(1)
+ 144   1              {
+ 145   2                      if(set_mode==1)
+ 146   2                      {
+ 147   3                              if(smg_blink_flag)
+ 148   3                              {
+ 149   4                                      smg_led_set[0]=~0x40;
+ 150   4                                      smg_led_set[1]=~du[set_led_num];
+ 151   4                                      smg_led_set[2]=~0x40;
+ 152   4                              }
+ 153   3                              else
+ 154   3                              {
+ 155   4                                      smg_led_set[0]=0xff;
+ 156   4                                      smg_led_set[1]=0xff;
+ 157   4                                      smg_led_set[2]=0xff;                            
+ 158   4                              }
+ 159   3                                      
+ 160   3                      }
+ 161   2                      else
+ 162   2                      {
+ 163   3                              smg_led_set[0]=~0x40;
+ 164   3                              smg_led_set[1]=~du[set_led_num];
+ 165   3                              smg_led_set[2]=~0x40;
+ 166   3                      }
+ 167   2                      if(set_mode==2)
+ 168   2                      {
+ 169   3                              if(smg_blink_flag)
+ 170   3                              { 
+ 171   4                                      smg_led_set[4]=~du[led_interval[set_led_num]/1000];
+ 172   4                                      smg_led_set[5]=~du[led_interval[set_led_num]/100%10];
+ 173   4                                      smg_led_set[6]=~du[led_interval[set_led_num]/10%10];
+ 174   4                                      smg_led_set[7]=~du[led_interval[set_led_num]%10];
+ 175   4                              }
+ 176   3                              else
+ 177   3                              {
+C51 COMPILER V9.60.0.0   MAIN                                                              04/08/2021 20:53:36 PAGE 4   
+
+ 178   4                                      smg_led_set[4]=0xff;
+ 179   4                                      smg_led_set[5]=0xff;
+ 180   4                                      smg_led_set[6]=0xff;
+ 181   4                                      smg_led_set[7]=0xff;
+ 182   4                              }
+ 183   3                                      
+ 184   3                      }
+ 185   2                      else
+ 186   2                      { 
+ 187   3                              smg_led_set[4]=~du[led_interval[set_led_num]/1000];
+ 188   3                              smg_led_set[5]=~du[led_interval[set_led_num]/100%10];
+ 189   3                              smg_led_set[6]=~du[led_interval[set_led_num]/10%10];
+ 190   3                              smg_led_set[7]=~du[led_interval[set_led_num]%10];
+ 191   3                      }
+ 192   2                      if(adc_flag)
+ 193   2                      {
+ 194   3                              adc_value=read_adc(0x03);
+ 195   3                              adc_flag=0;
+ 196   3                              led_pwm=adc_value/85+1;//led_pwm = 1 2 3 4
+ 197   3                              smg_led_pwm[7]=~du[led_pwm];
+ 198   3                      }
+ 199   2                      
+ 200   2                      switch(btnkey)
+ 201   2                      {
+ 202   3                              case 1:                         //S7
+ 203   3                                      if(led_mode)
+ 204   3                                      {
+ 205   4                                              led_mode=0;
+ 206   4                                      }
+ 207   3                                      else
+ 208   3                                      {
+ 209   4                                              led_mode=1;
+ 210   4                                              led_index=0;
+ 211   4                                      }
+ 212   3                                      btnkey=0;
+ 213   3                                      break;
+ 214   3                              case 2:                         //S6
+ 215   3                                      set_mode++;
+ 216   3                                      if(set_mode==3)
+ 217   3                                      {
+ 218   4                                              set_mode=0;
+ 219   4                                              write_24c02(1,led_interval[1]/100);     //Ð´EEPROW
+ 220   4                                              delayms(10);
+ 221   4                                              write_24c02(2,led_interval[2]/100);     //Ð´EEPROW
+ 222   4                                              delayms(10);
+ 223   4                                              write_24c02(3,led_interval[3]/100);     //Ð´EEPROW
+ 224   4                                              delayms(10);
+ 225   4                                              write_24c02(4,led_interval[4]/100);     //Ð´EEPROW
+ 226   4                                              delayms(10);
+ 227   4                                      }
+ 228   3                                      btnkey=0;
+ 229   3                                      break;
+ 230   3                              case 3:                         //S5
+ 231   3                                      if(set_mode==1)
+ 232   3                                      {
+ 233   4                                              if(set_led_num<4)
+ 234   4                                              {
+ 235   5                                                      set_led_num++;
+ 236   5                                              }
+ 237   4                                      }
+ 238   3                                      if(set_mode==2)
+ 239   3                                      {
+C51 COMPILER V9.60.0.0   MAIN                                                              04/08/2021 20:53:36 PAGE 5   
+
+ 240   4                                              if(led_interval[set_led_num]<1200)
+ 241   4                                              {
+ 242   5                                                      led_interval[set_led_num]+=100;
+ 243   5                                              }
+ 244   4                                      }
+ 245   3                                      btnkey=0;
+ 246   3                                      break;
+ 247   3                              case 4:                         //S4
+ 248   3                                      if(set_mode==1)
+ 249   3                                      {
+ 250   4                                              if(set_led_num>1)
+ 251   4                                              {
+ 252   5                                                      set_led_num--;
+ 253   5                                              }
+ 254   4                                      }
+ 255   3                                      if(set_mode==2)
+ 256   3                                      {
+ 257   4                                              if(led_interval[set_led_num]>400)
+ 258   4                                              {
+ 259   5                                                      led_interval[set_led_num]-=100;
+ 260   5                                              }
+ 261   4                                      }
+ 262   3                                      btnkey=0;
+ 263   3                                      break;
+ 264   3                              default:
+ 265   3                              break;
+ 266   3                      }
+ 267   2      
+ 268   2                      if(btn_state==btn_state_3 && set_mode==0)
+ 269   2                      {
+ 270   3                              set_mode=4;
+ 271   3                      }
+ 272   2                      if(btn_state==0)
+ 273   2                      {
+ 274   3                              if(set_mode==4) set_mode=0;
+ 275   3                      }
+ 276   2              }
+ 277   1      }
+ 278          
+ 279          void time0() interrupt 1
+ 280          {
+ 281   1              static int smg_count=0,key_count=0,i=0,led_count=0,adc_count=0,led_pwm_count=0,smg_blink_count=0;
+ 282   1              smg_count++; key_count++;led_count++;adc_count++;led_pwm_count++;smg_blink_count++;
+ 283   1              if(key_count==8)
+ 284   1              {
+ 285   2                      btnkey=scanbtn();
+ 286   2                      key_count=0;
+ 287   2              }
+ 288   1              
+ 289   1              if(adc_count==100)
+ 290   1              {
+ 291   2                      adc_count=0;
+ 292   2                      adc_flag=1;
+ 293   2              }
+ 294   1              
+ 295   1              if(smg_blink_count==800)
+ 296   1              {
+ 297   2                      smg_blink_count=0;
+ 298   2                      smg_blink_flag=!smg_blink_flag;
+ 299   2              }
+ 300   1              
+ 301   1              if(smg_count==3)
+C51 COMPILER V9.60.0.0   MAIN                                                              04/08/2021 20:53:36 PAGE 6   
+
+ 302   1              {
+ 303   2                      smg_count=0;
+ 304   2                      P2=(P2&0x1f)|0xc0;P0=0x00;P2&=0x1f;
+ 305   2                      if(set_mode==0)
+ 306   2                      {
+ 307   3                              P2=(P2&0x1f)|0xe0;P0=0xff;P2&=0x1f;
+ 308   3                      }
+ 309   2                      if(set_mode==1 || set_mode==2)
+ 310   2                      {
+ 311   3                              P2=(P2&0x1f)|0xe0;P0=smg_led_set[i];P2&=0x1f;
+ 312   3                      }
+ 313   2                      if(set_mode==4)
+ 314   2                      {
+ 315   3                              P2=(P2&0x1f)|0xe0;P0=smg_led_pwm[i];P2&=0x1f;
+ 316   3                      }
+ 317   2                      P2=(P2&0x1f)|0xc0;P0=wei[i];P2&=0x1f;P0=0xff;
+ 318   2                      i++;
+ 319   2                      if(i==8) i=0;
+ 320   2              }
+ 321   1              
+ 322   1              if(led_pwm_count < led_pwm*2)
+ 323   1              {
+ 324   2                      if(led_mode==1)
+ 325   2                      {
+ 326   3                              P2=(P2&0x1f)|0x80;P0=~(0x01<<led_index);P2&=0x1f;
+ 327   3                              if(led_count>led_interval[1])
+ 328   3                              {
+ 329   4                                      led_index++;
+ 330   4                                      led_count=0;
+ 331   4                                      if(led_index==8)
+ 332   4                                      {
+ 333   5                                              led_index=0;
+ 334   5                                              led_mode=2;
+ 335   5                                      }                               
+ 336   4                              }
+ 337   3                      }
+ 338   2                      if(led_mode==2)
+ 339   2                      {
+ 340   3                              P2=(P2&0x1f)|0x80;P0=~(0x80>>led_index);P2&=0x1f;
+ 341   3                              if(led_count>led_interval[2])
+ 342   3                              {
+ 343   4                                      led_index++;
+ 344   4                                      led_count=0;
+ 345   4                                      if(led_index==8)
+ 346   4                                      {
+ 347   5                                              led_index=0;
+ 348   5                                              led_mode=3;
+ 349   5                                      }
+ 350   4                              }
+ 351   3                      }
+ 352   2                      if(led_mode==3)
+ 353   2                      {
+ 354   3                              P2=(P2&0x1f)|0x80;P0=~((0x01<<led_index)|(0x80>>led_index));P2&=0x1f;
+ 355   3                              if(led_count>led_interval[3])
+ 356   3                              {
+ 357   4                                      led_index++;
+ 358   4                                      led_count=0;
+ 359   4                                      if(led_index==4)
+ 360   4                                      {
+ 361   5                                              led_mode=4;
+ 362   5                                      }
+ 363   4                              }
+C51 COMPILER V9.60.0.0   MAIN                                                              04/08/2021 20:53:36 PAGE 7   
+
+ 364   3                      }
+ 365   2                      if(led_mode==4)
+ 366   2                      {
+ 367   3                              P2=(P2&0x1f)|0x80;P0=~((0x01<<led_index)|(0x80>>led_index));P2&=0x1f;
+ 368   3                              if(led_count>led_interval[4])
+ 369   3                              {
+ 370   4                                      led_index++;
+ 371   4                                      led_count=0;
+ 372   4                                      if(led_index==8)
+ 373   4                                      {
+ 374   5                                              led_index=0;
+ 375   5                                              led_mode=1;
+ 376   5                                      }
+ 377   4                              }
+ 378   3                      }
+ 379   2              }
+ 380   1              else if(led_pwm_count <10)
+ 381   1              {
+ 382   2                      P2=(P2&0x1f)|0x80;P0=0xff;P2&=0x1f;
+ 383   2              }
+ 384   1              else
+ 385   1              {
+ 386   2                      led_pwm_count=0;
+ 387   2              }
+ 388   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1543    ----
+   CONSTANT SIZE    =     18    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     51    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      2    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
